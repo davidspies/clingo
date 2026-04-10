@@ -92,3 +92,16 @@ fn facts_simplified_away() {
         .collect();
     assert!(!rules.is_empty());
 }
+
+#[test]
+fn assign_external_after_observe() {
+    // Regression: ground_observed used to leave a dangling observer pointer,
+    // causing a segfault on subsequent operations.
+    let mut ctl = Control::new(&[]).unwrap();
+    ctl.add("base", &[], "#external state(a). #external state(b).")
+        .unwrap();
+    let _stmts = ctl.ground_base_observed().unwrap();
+
+    let sym = Symbol::parse("state(a)").unwrap();
+    ctl.assign_external(sym, clingo::TruthValue::True).unwrap();
+}

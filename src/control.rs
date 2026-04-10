@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::ptr;
@@ -62,6 +63,10 @@ pub struct Control {
     // Must be dropped *after* ptr since clingo may call the logger during cleanup.
     #[expect(clippy::type_complexity)]
     _logger: Option<Box<Box<dyn FnMut(Warning, &str)>>>,
+    // Observer state shared with clingo via raw pointer. Always registered;
+    // when Some, observer callbacks accumulate into the state.
+    // Swapped via RefCell on each ground_observed call.
+    observer_state: Box<RefCell<Option<ObserverState>>>,
 }
 
 // clingo_control_t is single-threaded; do not send across threads.
@@ -121,9 +126,25 @@ impl Control {
             )
         })?;
 
+        let observer_state = Box::new(RefCell::new(None));
+        let observer = make_observer();
+
+        let ctl_ptr =
+            ptr::NonNull::new(raw).expect("clingo_control_new returned null without error");
+
+        check(unsafe {
+            clingo_sys::clingo_control_register_observer(
+                ctl_ptr.as_ptr(),
+                &observer,
+                false,
+                &*observer_state as *const RefCell<Option<ObserverState>> as *mut c_void,
+            )
+        })?;
+
         Ok(Control {
-            ptr: ptr::NonNull::new(raw).expect("clingo_control_new returned null without error"),
+            ptr: ctl_ptr,
             _logger: boxed_logger,
+            observer_state,
         })
     }
 
@@ -200,25 +221,18 @@ impl Control {
         self.ground(&[("base", &[])])
     }
 
-    /// Register a ground program observer, ground, and return the observed statements.
+    /// Ground and return the observed statements.
     ///
-    /// This registers the observer, then calls `ground` with the given parts.
     /// The observer captures all ground statements produced during grounding.
     pub fn ground_observed(
         &mut self,
         parts: &[(&str, &[Symbol])],
     ) -> Result<Vec<GroundStatement>, Error> {
-        let mut state = ObserverState::new();
-        let observer = make_observer();
-        check(unsafe {
-            clingo_sys::clingo_control_register_observer(
-                self.ptr.as_ptr(),
-                &observer,
-                false, // don't replace default observer
-                &mut state as *mut ObserverState as *mut c_void,
-            )
-        })?;
+        // Swap in a fresh state to collect into.
+        *self.observer_state.borrow_mut() = Some(ObserverState::new());
         self.ground(parts)?;
+        // Swap out the state and convert.
+        let state = self.observer_state.borrow_mut().take().unwrap();
         Ok(state.into_statements())
     }
 

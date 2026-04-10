@@ -1,7 +1,11 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::os::raw::c_void;
 
 use crate::symbol::Symbol;
+
+/// The type passed to clingo as the observer's data pointer.
+pub(crate) type ObserverCell = RefCell<Option<ObserverState>>;
 
 /// A single statement in the ground program.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,6 +165,14 @@ impl ObserverState {
     }
 }
 
+/// Borrow the observer cell; if it contains Some(state), run the closure.
+fn with_state(data: *mut c_void, f: impl FnOnce(&mut ObserverState)) {
+    let cell = unsafe { &*(data as *const ObserverCell) };
+    if let Some(state) = cell.borrow_mut().as_mut() {
+        f(state);
+    }
+}
+
 unsafe extern "C" fn on_rule(
     choice: bool,
     head: *const clingo_sys::clingo_atom_t,
@@ -169,12 +181,13 @@ unsafe extern "C" fn on_rule(
     body_size: usize,
     data: *mut c_void,
 ) -> bool {
-    let state = unsafe { &mut *(data as *mut ObserverState) };
-    let head = unsafe { raw_slice(head, head_size) }.to_vec();
-    let body = unsafe { raw_slice(body, body_size) }.to_vec();
-    state
-        .statements
-        .push(GroundStatementInternal::Rule { choice, head, body });
+    with_state(data, |state| {
+        let head = unsafe { raw_slice(head, head_size) }.to_vec();
+        let body = unsafe { raw_slice(body, body_size) }.to_vec();
+        state
+            .statements
+            .push(GroundStatementInternal::Rule { choice, head, body });
+    });
     true
 }
 
@@ -187,15 +200,16 @@ unsafe extern "C" fn on_weight_rule(
     body_size: usize,
     data: *mut c_void,
 ) -> bool {
-    let state = unsafe { &mut *(data as *mut ObserverState) };
-    let head = unsafe { raw_slice(head, head_size) }.to_vec();
-    let raw_body = unsafe { raw_slice(body, body_size) };
-    let body = raw_body.iter().map(|wl| (wl.literal, wl.weight)).collect();
-    state.statements.push(GroundStatementInternal::WeightRule {
-        choice,
-        head,
-        lower_bound,
-        body,
+    with_state(data, |state| {
+        let head = unsafe { raw_slice(head, head_size) }.to_vec();
+        let raw_body = unsafe { raw_slice(body, body_size) };
+        let body = raw_body.iter().map(|wl| (wl.literal, wl.weight)).collect();
+        state.statements.push(GroundStatementInternal::WeightRule {
+            choice,
+            head,
+            lower_bound,
+            body,
+        });
     });
     true
 }
@@ -206,12 +220,13 @@ unsafe extern "C" fn on_minimize(
     size: usize,
     data: *mut c_void,
 ) -> bool {
-    let state = unsafe { &mut *(data as *mut ObserverState) };
-    let raw = unsafe { raw_slice(literals, size) };
-    let literals = raw.iter().map(|wl| (wl.literal, wl.weight)).collect();
-    state
-        .statements
-        .push(GroundStatementInternal::Minimize { priority, literals });
+    with_state(data, |state| {
+        let raw = unsafe { raw_slice(literals, size) };
+        let literals = raw.iter().map(|wl| (wl.literal, wl.weight)).collect();
+        state
+            .statements
+            .push(GroundStatementInternal::Minimize { priority, literals });
+    });
     true
 }
 
@@ -220,10 +235,11 @@ unsafe extern "C" fn on_external(
     type_: clingo_sys::clingo_external_type_t,
     data: *mut c_void,
 ) -> bool {
-    let state = unsafe { &mut *(data as *mut ObserverState) };
-    state.statements.push(GroundStatementInternal::External {
-        atom,
-        external_type: ExternalType::from_raw(type_),
+    with_state(data, |state| {
+        state.statements.push(GroundStatementInternal::External {
+            atom,
+            external_type: ExternalType::from_raw(type_),
+        });
     });
     true
 }
@@ -233,10 +249,11 @@ unsafe extern "C" fn on_output_atom(
     atom: clingo_sys::clingo_atom_t,
     data: *mut c_void,
 ) -> bool {
-    let state = unsafe { &mut *(data as *mut ObserverState) };
-    state
-        .atom_map
-        .insert(atom, unsafe { Symbol::from_raw(symbol) });
+    with_state(data, |state| {
+        state
+            .atom_map
+            .insert(atom, unsafe { Symbol::from_raw(symbol) });
+    });
     true
 }
 
