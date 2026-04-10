@@ -208,9 +208,7 @@ impl Control {
         &mut self,
         parts: &[(&str, &[Symbol])],
     ) -> Result<Vec<GroundStatement>, Error> {
-        let mut state = ObserverState {
-            statements: Vec::new(),
-        };
+        let mut state = ObserverState::new();
         let observer = make_observer();
         check(unsafe {
             clingo_sys::clingo_control_register_observer(
@@ -221,7 +219,7 @@ impl Control {
             )
         })?;
         self.ground(parts)?;
-        Ok(state.statements)
+        Ok(state.into_statements())
     }
 
     /// Convenience: observe the `"base"` part with no parameters.

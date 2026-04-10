@@ -11,12 +11,12 @@ fn iterate_atoms_by_signature() {
     .unwrap();
     ctl.ground_base().unwrap();
 
-    let edges: Vec<Fun<(i32, i32)>> = ctl.atoms("edge").unwrap();
+    let edges: Vec<(i32, i32)> = ctl.atoms("edge").unwrap();
     assert_eq!(edges.len(), 2);
-    assert!(edges.contains(&Fun("edge", (1, 2))));
-    assert!(edges.contains(&Fun("edge", (2, 3))));
+    assert!(edges.contains(&(1, 2)));
+    assert!(edges.contains(&(2, 3)));
 
-    let nodes: Vec<Fun<(i32,)>> = ctl.atoms("node").unwrap();
+    let nodes: Vec<i32> = ctl.atoms("node").unwrap();
     assert_eq!(nodes.len(), 3);
 }
 
@@ -35,7 +35,7 @@ fn atoms_during_solve() {
 
     while handle.next_model().unwrap().is_some() {
         let model = handle.current_model().unwrap();
-        let edges = handle.control().atoms::<(i32, i32)>("edge").unwrap();
+        let edges: Vec<(i32, i32)> = handle.control().atoms("edge").unwrap();
         for &(a, b) in &edges {
             let sym = Fun("path", (a, b)).to_symbol();
             let _in_model = model.contains(sym).unwrap();
@@ -50,7 +50,7 @@ fn atoms_with_symbol_args() {
     ctl.add("base", &[], "f(a,1). f(b,2). f(c,3).").unwrap();
     ctl.ground_base().unwrap();
 
-    let funs: Vec<Fun<(F0, i32)>> = ctl.atoms("f").unwrap();
+    let funs: Vec<(F0, i32)> = ctl.atoms("f").unwrap();
     assert_eq!(funs.len(), 3);
 }
 
@@ -60,7 +60,7 @@ fn atoms_no_matches() {
     ctl.add("base", &[], "a. b.").unwrap();
     ctl.ground_base().unwrap();
 
-    let result: Vec<Fun<i32>> = ctl.atoms("nonexistent").unwrap();
+    let result: Vec<i32> = ctl.atoms("nonexistent").unwrap();
     assert!(result.is_empty());
 }
 
