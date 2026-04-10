@@ -3,6 +3,7 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use crate::error::{Error, check};
+use crate::solve::{Model, SolveResult, solve_with_callback};
 use crate::symbol::Symbol;
 
 /// Owns a `clingo_control_t` and frees it on drop.
@@ -122,5 +123,15 @@ impl Control {
     /// Convenience: ground just the `"base"` part with no parameters.
     pub fn ground_base(&mut self) -> Result<(), Error> {
         self.ground(&[("base", &[])])
+    }
+
+    /// Solve the program, calling `on_model` for each model found.
+    ///
+    /// The callback returns `Ok(true)` to continue searching or `Ok(false)` to stop.
+    pub fn solve(
+        &mut self,
+        on_model: impl FnMut(&Model) -> Result<bool, Error>,
+    ) -> Result<SolveResult, Error> {
+        solve_with_callback(self.ptr.as_ptr(), on_model)
     }
 }
