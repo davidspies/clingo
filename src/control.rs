@@ -1,5 +1,5 @@
-use std::ffi::CString;
-use std::os::raw::c_char;
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_void};
 use std::ptr;
 
 use crate::config::Configuration;
@@ -7,11 +7,58 @@ use crate::error::{ClingoError, Error, check};
 use crate::solve::{Model, SolveResult, solve_with_callback};
 use crate::symbol::Symbol;
 
+/// Warning codes from the clingo logger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Warning {
+    OperationUndefined,
+    RuntimeError,
+    AtomUndefined,
+    FileIncluded,
+    VariableUnbounded,
+    GlobalVariable,
+    Other,
+}
+
+impl Warning {
+    fn from_raw(code: clingo_sys::clingo_warning_t) -> Self {
+        match code as u32 {
+            clingo_sys::clingo_warning_e_clingo_warning_operation_undefined => {
+                Warning::OperationUndefined
+            }
+            clingo_sys::clingo_warning_e_clingo_warning_runtime_error => Warning::RuntimeError,
+            clingo_sys::clingo_warning_e_clingo_warning_atom_undefined => Warning::AtomUndefined,
+            clingo_sys::clingo_warning_e_clingo_warning_file_included => Warning::FileIncluded,
+            clingo_sys::clingo_warning_e_clingo_warning_variable_unbounded => {
+                Warning::VariableUnbounded
+            }
+            clingo_sys::clingo_warning_e_clingo_warning_global_variable => Warning::GlobalVariable,
+            _ => Warning::Other,
+        }
+    }
+}
+
+/// C-compatible trampoline for the logger callback.
+unsafe extern "C" fn logger_trampoline(
+    code: clingo_sys::clingo_warning_t,
+    message: *const c_char,
+    data: *mut c_void,
+) {
+    let closure = unsafe { &mut *(data as *mut Box<dyn FnMut(Warning, &str)>) };
+    let warning = Warning::from_raw(code);
+    let msg = unsafe { CStr::from_ptr(message) }
+        .to_str()
+        .unwrap_or("<invalid UTF-8>");
+    closure(warning, msg);
+}
+
 /// Owns a `clingo_control_t` and frees it on drop.
 ///
 /// This is the main entry point for grounding and solving logic programs.
 pub struct Control {
     pub(crate) ptr: ptr::NonNull<clingo_sys::clingo_control_t>,
+    // Boxed logger closure, kept alive for the lifetime of the Control.
+    // Must be dropped *after* ptr since clingo may call the logger during cleanup.
+    _logger: Option<Box<Box<dyn FnMut(Warning, &str)>>>,
 }
 
 // clingo_control_t is single-threaded; do not send across threads.
@@ -30,26 +77,49 @@ impl Control {
     /// `args` are command-line style options forwarded to the grounder/solver
     /// (e.g. `["0"]` for enumerating all models).
     pub fn new(args: &[&str]) -> Result<Self, Error> {
+        Self::with_logger(args, None::<fn(Warning, &str)>, 20)
+    }
+
+    /// Create a new control object with a custom logger.
+    ///
+    /// The logger receives a `Warning` code and message string.
+    /// `message_limit` controls how many messages are reported
+    /// before being suppressed (0 for unlimited).
+    pub fn with_logger(
+        args: &[&str],
+        logger: Option<impl FnMut(Warning, &str) + 'static>,
+        message_limit: u32,
+    ) -> Result<Self, Error> {
         let c_args: Vec<CString> = args
             .iter()
             .map(|s| CString::new(*s))
             .collect::<Result<_, _>>()?;
         let c_ptrs: Vec<*const c_char> = c_args.iter().map(|s| s.as_ptr()).collect();
 
+        let (logger_fn, logger_data, boxed_logger) = match logger {
+            Some(f) => {
+                let mut boxed: Box<Box<dyn FnMut(Warning, &str)>> = Box::new(Box::new(f));
+                let data = &mut *boxed as *mut Box<dyn FnMut(Warning, &str)> as *mut c_void;
+                (Some(logger_trampoline as _), data, Some(boxed))
+            }
+            None => (None, ptr::null_mut(), None),
+        };
+
         let mut raw: *mut clingo_sys::clingo_control_t = ptr::null_mut();
         check(unsafe {
             clingo_sys::clingo_control_new(
                 c_ptrs.as_ptr(),
                 c_ptrs.len(),
-                None, // default logger (stderr)
-                ptr::null_mut(),
-                20, // default message limit
+                logger_fn,
+                logger_data,
+                message_limit as std::os::raw::c_uint,
                 &mut raw,
             )
         })?;
 
         Ok(Control {
             ptr: ptr::NonNull::new(raw).expect("clingo_control_new returned null without error"),
+            _logger: boxed_logger,
         })
     }
 
