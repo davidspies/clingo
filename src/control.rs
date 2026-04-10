@@ -4,6 +4,7 @@ use std::ptr;
 
 use crate::config::Configuration;
 use crate::error::{ClingoError, Error, check};
+use crate::fun::{Fun, SymbolicArgs};
 use crate::observer::{GroundStatement, ObserverState, make_observer};
 use crate::solve::{SolveHandle, solve_yielding};
 use crate::symbol::Symbol;
@@ -233,7 +234,7 @@ impl Control {
     /// The handle borrows the control mutably. Call `next_model()` to advance,
     /// then `close()` to get the final result.
     pub fn solve_iter(&mut self) -> Result<SolveHandle<'_>, ClingoError> {
-        unsafe { solve_yielding(self.ptr.as_ptr()) }
+        solve_yielding(self)
     }
 
     /// Get the configuration object for reading and modifying solver settings.
@@ -274,6 +275,65 @@ impl Control {
         check(unsafe { clingo_sys::clingo_symbolic_atoms_literal(atoms, iter, &mut literal) })?;
 
         Ok(Some(literal))
+    }
+
+    /// Iterate over all ground atoms matching a predicate name and arity,
+    /// converting each to `Fun<Args>`. Atoms whose arguments don't match
+    /// the `Args` type are silently skipped.
+    ///
+    /// This uses the symbolic atoms table, so it works on `&self` and can
+    /// be called through `SolveHandle::control()`.
+    pub fn atoms<Args: SymbolicArgs>(&self, name: &str) -> Result<Vec<Fun<Args>>, Error> {
+        let c_name = CString::new(name)?;
+        let arity = Args::arity() as u32;
+
+        let mut signature: clingo_sys::clingo_signature_t = 0;
+        check(unsafe {
+            clingo_sys::clingo_signature_create(c_name.as_ptr(), arity, true, &mut signature)
+        })?;
+
+        let mut atoms_table: *const clingo_sys::clingo_symbolic_atoms_t = ptr::null();
+        check(unsafe {
+            clingo_sys::clingo_control_symbolic_atoms(self.ptr.as_ptr(), &mut atoms_table)
+        })?;
+
+        let mut iter: clingo_sys::clingo_symbolic_atom_iterator_t = 0;
+        check(unsafe {
+            clingo_sys::clingo_symbolic_atoms_begin(atoms_table, &signature, &mut iter)
+        })?;
+
+        let mut end: clingo_sys::clingo_symbolic_atom_iterator_t = 0;
+        check(unsafe { clingo_sys::clingo_symbolic_atoms_end(atoms_table, &mut end) })?;
+
+        let mut results = Vec::new();
+        loop {
+            let mut equal = false;
+            check(unsafe {
+                clingo_sys::clingo_symbolic_atoms_iterator_is_equal_to(
+                    atoms_table,
+                    iter,
+                    end,
+                    &mut equal,
+                )
+            })?;
+            if equal {
+                break;
+            }
+
+            let mut sym: clingo_sys::clingo_symbol_t = 0;
+            check(unsafe {
+                clingo_sys::clingo_symbolic_atoms_symbol(atoms_table, iter, &mut sym)
+            })?;
+
+            let symbol = unsafe { Symbol::from_raw(sym) };
+            if let Some(fun) = symbol.as_fun::<Args>() {
+                results.push(fun);
+            }
+
+            check(unsafe { clingo_sys::clingo_symbolic_atoms_next(atoms_table, iter, &mut iter) })?;
+        }
+
+        Ok(results)
     }
 
     /// Assign a truth value to an external atom.

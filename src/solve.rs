@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use std::ptr;
 
 use crate::control::Control;
@@ -119,8 +118,8 @@ impl Model {
 /// (but the result is discarded).
 pub struct SolveHandle<'a> {
     handle: *mut clingo_sys::clingo_solve_handle_t,
-    model: Model,
-    _control: PhantomData<&'a mut Control>,
+    model: Option<Model>,
+    control: &'a mut Control,
 }
 
 impl Drop for SolveHandle<'_> {
@@ -132,11 +131,17 @@ impl Drop for SolveHandle<'_> {
 }
 
 impl<'a> SolveHandle<'a> {
+    /// Get a shared reference to the underlying `Control`.
+    pub fn control(&self) -> &Control {
+        self.control
+    }
+
     /// Advance to the next model.
     ///
-    /// Returns `None` when there are no more models. The returned `&Model`
-    /// borrows this handle, so you must drop it before calling `next_model`
-    /// again.
+    /// Returns `Some(&Model)` or `None` when there are no more models.
+    /// The returned reference borrows this handle mutably. To inspect the
+    /// model while also accessing `control()`, use [`current_model`](Self::current_model)
+    /// after this call returns.
     pub fn next_model(&mut self) -> Result<Option<&Model>, ClingoError> {
         check(unsafe { clingo_sys::clingo_solve_handle_resume(self.handle) })?;
 
@@ -144,11 +149,21 @@ impl<'a> SolveHandle<'a> {
         check(unsafe { clingo_sys::clingo_solve_handle_model(self.handle, &mut model_ptr) })?;
 
         if model_ptr.is_null() {
-            return Ok(None);
+            self.model = None;
+            Ok(None)
+        } else {
+            self.model = Some(Model::from_ptr(model_ptr));
+            Ok(self.model.as_ref())
         }
+    }
 
-        self.model = Model::from_ptr(model_ptr);
-        Ok(Some(&self.model))
+    /// Get the current model, if any.
+    ///
+    /// Returns `Some(&Model)` after a successful [`next_model`](Self::next_model)
+    /// call. Unlike `next_model`, this borrows immutably, so you can
+    /// simultaneously access [`control()`](Self::control).
+    pub fn current_model(&self) -> Option<&Model> {
+        self.model.as_ref()
     }
 
     /// Close the handle and return the final solve result.
@@ -162,15 +177,11 @@ impl<'a> SolveHandle<'a> {
     }
 }
 
-/// # Safety
-/// `control_ptr` must be valid for `'a` and exclusively borrowed for that lifetime.
-pub(crate) unsafe fn solve_yielding<'a>(
-    control_ptr: *mut clingo_sys::clingo_control_t,
-) -> Result<SolveHandle<'a>, ClingoError> {
+pub(crate) fn solve_yielding(control: &mut Control) -> Result<SolveHandle<'_>, ClingoError> {
     let mut handle: *mut clingo_sys::clingo_solve_handle_t = ptr::null_mut();
     check(unsafe {
         clingo_sys::clingo_control_solve(
-            control_ptr,
+            control.ptr.as_ptr(),
             clingo_sys::clingo_solve_mode_e_clingo_solve_mode_yield,
             ptr::null(),
             0,
@@ -182,7 +193,7 @@ pub(crate) unsafe fn solve_yielding<'a>(
 
     Ok(SolveHandle {
         handle,
-        model: Model::from_ptr(ptr::null()),
-        _control: PhantomData,
+        model: None,
+        control,
     })
 }

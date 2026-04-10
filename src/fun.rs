@@ -10,41 +10,60 @@ pub fn f0(name: &'static str) -> F0 {
     Fun(name, ())
 }
 
-pub trait FromSymbol: Sized {
+pub trait Symbolic: Sized {
     fn from_symbol(sym: Symbol) -> Option<Self>;
+    fn to_symbol(&self) -> Symbol;
 }
 
-pub trait FromSymbols: Sized {
+pub trait SymbolicArgs: Sized {
+    fn arity() -> usize;
     fn from_symbols(syms: Vec<Symbol>) -> Option<Self>;
+    fn to_symbols(&self) -> Vec<Symbol>;
 }
 
-impl FromSymbol for Symbol {
+impl Symbolic for Symbol {
     fn from_symbol(sym: Symbol) -> Option<Self> {
         Some(sym)
     }
+    fn to_symbol(&self) -> Symbol {
+        *self
+    }
 }
 
-impl FromSymbol for i32 {
+impl Symbolic for i32 {
     fn from_symbol(sym: Symbol) -> Option<Self> {
         sym.as_number()
     }
-}
-
-impl FromSymbol for &'static str {
-    fn from_symbol(sym: Symbol) -> Option<Self> {
-        sym.as_string()
+    fn to_symbol(&self) -> Symbol {
+        Symbol::number(*self)
     }
 }
 
-impl<Args: FromSymbols> FromSymbol for Fun<Args> {
+impl Symbolic for &'static str {
+    fn from_symbol(sym: Symbol) -> Option<Self> {
+        sym.as_string()
+    }
+    fn to_symbol(&self) -> Symbol {
+        Symbol::string(self).unwrap()
+    }
+}
+
+impl<Args: SymbolicArgs> Symbolic for Fun<Args> {
     fn from_symbol(sym: Symbol) -> Option<Self> {
         let name = sym.name()?;
         let args = sym.arguments()?;
         Some(Self(name, Args::from_symbols(args)?))
     }
+    fn to_symbol(&self) -> Symbol {
+        let &Self(name, ref args) = self;
+        Symbol::function(name, &args.to_symbols(), true).unwrap()
+    }
 }
 
-impl<T: FromSymbol> FromSymbols for T {
+impl<T: Symbolic> SymbolicArgs for T {
+    fn arity() -> usize {
+        1
+    }
     fn from_symbols(syms: Vec<Symbol>) -> Option<Self> {
         if syms.len() == 1 {
             Some(T::from_symbol(syms[0])?)
@@ -52,9 +71,15 @@ impl<T: FromSymbol> FromSymbols for T {
             None
         }
     }
+    fn to_symbols(&self) -> Vec<Symbol> {
+        vec![self.to_symbol()]
+    }
 }
 
-impl<T: FromSymbol, const N: usize> FromSymbols for [T; N] {
+impl<T: Symbolic, const N: usize> SymbolicArgs for [T; N] {
+    fn arity() -> usize {
+        N
+    }
     fn from_symbols(syms: Vec<Symbol>) -> Option<Self> {
         if syms.len() == N {
             let ts: Option<Vec<T>> = syms.into_iter().map(T::from_symbol).collect();
@@ -66,16 +91,27 @@ impl<T: FromSymbol, const N: usize> FromSymbols for [T; N] {
             None
         }
     }
+    fn to_symbols(&self) -> Vec<Symbol> {
+        self.iter().map(Symbolic::to_symbol).collect()
+    }
 }
 
 macro_rules! impl_from_symbols_for_tuple {
     ($($T:ident),*) => {
-        impl<$($T: FromSymbol),*> FromSymbols for ($($T,)*) {
+        impl<$($T: Symbolic),*> SymbolicArgs for ($($T,)*) {
+            fn arity() -> usize {
+                <[&str]>::len(&[$(stringify!($T)),*])
+            }
             fn from_symbols(syms: Vec<Symbol>) -> Option<Self> {
                 let mut iter = syms.into_iter();
                 let result = ($($T::from_symbol(iter.next()?)?,)*);
                 if iter.next().is_some() { return None; }
                 Some(result)
+            }
+            #[allow(non_snake_case)]
+            fn to_symbols(&self) -> Vec<Symbol> {
+                let ($($T,)*) = self;
+                vec![$($T.to_symbol(),)*]
             }
         }
     };

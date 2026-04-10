@@ -9,7 +9,7 @@ mod symbol;
 pub use config::Configuration;
 pub use control::{Control, TruthValue, Warning};
 pub use error::{ClingoError, ClingoErrorCode, Error};
-pub use fun::{F0, FromSymbol, FromSymbols, Fun, f0};
+pub use fun::{F0, Fun, Symbolic, SymbolicArgs, f0};
 pub use observer::{Atom, ExternalType, GroundStatement, Literal};
 pub use solve::{Model, ShowType, SolveHandle, SolveResult};
 pub use symbol::{Symbol, SymbolType, SymbolValue};

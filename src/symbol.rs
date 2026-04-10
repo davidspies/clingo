@@ -6,7 +6,7 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use crate::error::{ClingoError, Error, check};
-use crate::fun::{FromSymbols, Fun};
+use crate::fun::{Fun, SymbolicArgs};
 
 /// A symbol broken into its typed components.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -219,7 +219,7 @@ impl Symbol {
 
     /// Try to view this symbol as a positive function whose arguments match Args.
     /// Returns `None` if not a function, negative, or wrong arity.
-    pub fn as_fun<Args: FromSymbols>(self) -> Option<Fun<Args>> {
+    pub fn as_fun<Args: SymbolicArgs>(self) -> Option<Fun<Args>> {
         if self.symbol_type() != SymbolType::Function || self.is_positive() != Some(true) {
             return None;
         }
