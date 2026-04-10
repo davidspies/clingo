@@ -132,3 +132,25 @@ fn as_fun() {
     assert_eq!(fixed.0, "c");
     assert_eq!(fixed.1, []);
 }
+
+#[test]
+fn parse() {
+    let s = Symbol::parse("edge(1,2)").unwrap();
+    assert_eq!(
+        s,
+        Symbol::function("edge", &[Symbol::number(1), Symbol::number(2)], true).unwrap()
+    );
+
+    assert_eq!(Symbol::parse("42").unwrap(), Symbol::number(42));
+    assert_eq!(Symbol::parse("a").unwrap(), Symbol::id("a", true).unwrap());
+    assert_eq!(
+        Symbol::parse("-a").unwrap(),
+        Symbol::id("a", false).unwrap()
+    );
+    assert_eq!(
+        Symbol::parse("\"hello\"").unwrap(),
+        Symbol::string("hello").unwrap()
+    );
+
+    assert!(Symbol::parse("not valid!!!").is_err());
+}

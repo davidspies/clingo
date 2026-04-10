@@ -123,6 +123,16 @@ impl Symbol {
         Ok(Symbol(sym))
     }
 
+    /// Parse a symbol from a string like `"edge(1,2)"` or `"42"`.
+    pub fn parse(s: &str) -> Result<Self, Error> {
+        let c_str = CString::new(s)?;
+        let mut sym: clingo_sys::clingo_symbol_t = 0;
+        check(unsafe {
+            clingo_sys::clingo_parse_term(c_str.as_ptr(), None, ptr::null_mut(), 20, &mut sym)
+        })?;
+        Ok(Symbol(sym))
+    }
+
     // -- Inspection --
 
     /// Get the type of this symbol.
