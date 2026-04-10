@@ -4,6 +4,7 @@ use std::ptr;
 
 use crate::config::Configuration;
 use crate::error::{ClingoError, Error, check};
+use crate::observer::{GroundStatement, ObserverState, make_observer};
 use crate::solve::{SolveHandle, solve_yielding};
 use crate::symbol::Symbol;
 
@@ -194,6 +195,35 @@ impl Control {
     /// Convenience: ground just the `"base"` part with no parameters.
     pub fn ground_base(&mut self) -> Result<(), Error> {
         self.ground(&[("base", &[])])
+    }
+
+    /// Register a ground program observer, ground, and return the observed statements.
+    ///
+    /// This registers the observer, then calls `ground` with the given parts.
+    /// The observer captures all ground statements produced during grounding.
+    pub fn ground_observed(
+        &mut self,
+        parts: &[(&str, &[Symbol])],
+    ) -> Result<Vec<GroundStatement>, Error> {
+        let mut state = ObserverState {
+            statements: Vec::new(),
+        };
+        let observer = make_observer();
+        check(unsafe {
+            clingo_sys::clingo_control_register_observer(
+                self.ptr.as_ptr(),
+                &observer,
+                false, // don't replace default observer
+                &mut state as *mut ObserverState as *mut c_void,
+            )
+        })?;
+        self.ground(parts)?;
+        Ok(state.statements)
+    }
+
+    /// Convenience: observe the `"base"` part with no parameters.
+    pub fn ground_base_observed(&mut self) -> Result<Vec<GroundStatement>, Error> {
+        self.ground_observed(&[("base", &[])])
     }
 
     /// Solve the program, returning a handle for iterating models one at a time.
