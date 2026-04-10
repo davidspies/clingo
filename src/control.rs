@@ -309,9 +309,11 @@ impl Control {
     /// converting each to `Fun<Args>`. Atoms whose arguments don't match
     /// the `Args` type are silently skipped.
     ///
+    /// Returns a Vec of the found symbol together with its arguments.
+    ///
     /// This uses the symbolic atoms table, so it works on `&self` and can
     /// be called through `SolveHandle::control()`.
-    pub fn atoms<Args: SymbolicArgs>(&self, name: &str) -> Result<Vec<Args>, Error> {
+    pub fn atoms<Args: SymbolicArgs>(&self, name: &str) -> Result<Vec<(Symbol, Args)>, Error> {
         let c_name = CString::new(name)?;
         let arity = Args::arity() as u32;
 
@@ -356,7 +358,7 @@ impl Control {
             let symbol = unsafe { Symbol::from_raw(sym) };
             if let Some(Fun(n, fun)) = symbol.as_fun::<Args>() {
                 assert_eq!(n, name);
-                results.push(fun);
+                results.push((symbol, fun));
             }
 
             check(unsafe { clingo_sys::clingo_symbolic_atoms_next(atoms_table, iter, &mut iter) })?;
