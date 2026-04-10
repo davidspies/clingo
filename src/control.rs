@@ -59,6 +59,7 @@ pub struct Control {
     pub(crate) ptr: ptr::NonNull<clingo_sys::clingo_control_t>,
     // Boxed logger closure, kept alive for the lifetime of the Control.
     // Must be dropped *after* ptr since clingo may call the logger during cleanup.
+    #[expect(clippy::type_complexity)]
     _logger: Option<Box<Box<dyn FnMut(Warning, &str)>>>,
 }
 
@@ -99,6 +100,7 @@ impl Control {
 
         let (logger_fn, logger_data, boxed_logger) = match logger {
             Some(f) => {
+                #[expect(clippy::type_complexity)]
                 let mut boxed: Box<Box<dyn FnMut(Warning, &str)>> = Box::new(Box::new(f));
                 let data = &mut *boxed as *mut Box<dyn FnMut(Warning, &str)> as *mut c_void;
                 (Some(logger_trampoline as _), data, Some(boxed))

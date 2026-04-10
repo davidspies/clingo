@@ -6,6 +6,7 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use crate::error::{ClingoError, Error, check};
+use crate::fun::{FromSymbols, Fun};
 
 /// A symbol broken into its typed components.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,10 +21,6 @@ pub enum SymbolValue {
     },
     Supremum,
 }
-
-/// A function symbol with a statically known arity.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Fun<const N: usize>(pub &'static str, pub [Symbol; N]);
 
 /// The type of a clingo symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,15 +217,14 @@ impl Symbol {
         }
     }
 
-    /// Try to view this symbol as a positive function with exactly `N` arguments.
+    /// Try to view this symbol as a positive function whose arguments match Args.
     /// Returns `None` if not a function, negative, or wrong arity.
-    pub fn as_fun<const N: usize>(self) -> Option<Fun<N>> {
+    pub fn as_fun<Args: FromSymbols>(self) -> Option<Fun<Args>> {
         if self.symbol_type() != SymbolType::Function || self.is_positive() != Some(true) {
             return None;
         }
-        let args = self.arguments()?;
-        let arr: [Symbol; N] = args.try_into().ok()?;
-        Some(Fun(self.name().unwrap(), arr))
+        let args = Args::from_symbols(self.arguments()?)?;
+        Some(Fun(self.name().unwrap(), args))
     }
 
     /// Render the symbol to a string (works for all symbol types).

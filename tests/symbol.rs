@@ -1,4 +1,4 @@
-use clingo::{Fun, Symbol, SymbolType, SymbolValue};
+use clingo::{F0, Fun, Symbol, SymbolType, SymbolValue, f0};
 use std::collections::HashSet;
 
 #[test]
@@ -108,25 +108,27 @@ fn as_fun() {
     let b = Symbol::number(1);
     let f = Symbol::function("edge", &[a, b], true).unwrap();
 
-    let fixed: Fun<2> = f.as_fun().unwrap();
+    let fixed = f.as_fun::<(F0, i32)>().unwrap();
+    assert_eq!(fixed, Fun("edge", (f0("a"), 1)));
+    let fixed = f.as_fun::<[Symbol; 2]>().unwrap();
     assert_eq!(fixed.0, "edge");
     assert_eq!(fixed.1, [a, b]);
 
     // wrong arity
-    assert!(f.as_fun::<0>().is_none());
-    assert!(f.as_fun::<1>().is_none());
-    assert!(f.as_fun::<3>().is_none());
+    assert!(f.as_fun::<[Symbol; 0]>().is_none());
+    assert!(f.as_fun::<[Symbol; 1]>().is_none());
+    assert!(f.as_fun::<[Symbol; 3]>().is_none());
 
     // not a function
-    assert!(Symbol::number(1).as_fun::<0>().is_none());
+    assert!(Symbol::number(1).as_fun::<[Symbol; 0]>().is_none());
 
     // negative
     let neg = Symbol::id("foo", false).unwrap();
-    assert!(neg.as_fun::<0>().is_none());
+    assert!(neg.as_fun::<[Symbol; 0]>().is_none());
 
     // zero-arity positive id
     let id = Symbol::id("c", true).unwrap();
-    let fixed: Fun<0> = id.as_fun().unwrap();
+    let fixed: Fun<[Symbol; 0]> = id.as_fun().unwrap();
     assert_eq!(fixed.0, "c");
     assert_eq!(fixed.1, []);
 }
