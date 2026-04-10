@@ -34,21 +34,21 @@ pub enum GroundStatement<At = Atom, Lit = Literal> {
 type GroundStatementInternal = GroundStatement<u32, i32>;
 
 /// The sign of a literal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Sign {
     Pos,
     Neg,
 }
 
 /// A ground atom, either a user-visible symbol or an auxiliary grounder atom.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Atom {
     Symbol(Symbol),
     Aux(u32),
 }
 
 /// A signed ground atom.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Literal(pub Sign, pub Atom);
 
 /// The type of an external atom declaration.
