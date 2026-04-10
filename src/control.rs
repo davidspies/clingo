@@ -246,13 +246,19 @@ impl Control {
         Ok(unsafe { Configuration::new(cfg, root) })
     }
 
-    /// Look up the program literal for a ground atom symbol.
+    /// Look up a symbol in the symbolic atoms table.
     ///
-    /// Returns `None` if the symbol doesn't appear in the ground program.
-    fn literal_for_symbol(
+    /// Returns the (table, iterator) pair, or `None` if not found.
+    fn find_symbolic_atom(
         &self,
         symbol: Symbol,
-    ) -> Result<Option<clingo_sys::clingo_literal_t>, ClingoError> {
+    ) -> Result<
+        Option<(
+            *const clingo_sys::clingo_symbolic_atoms_t,
+            clingo_sys::clingo_symbolic_atom_iterator_t,
+        )>,
+        ClingoError,
+    > {
         let mut atoms: *const clingo_sys::clingo_symbolic_atoms_t = ptr::null();
         check(unsafe { clingo_sys::clingo_control_symbolic_atoms(self.ptr.as_ptr(), &mut atoms) })?;
 
@@ -267,14 +273,34 @@ impl Control {
             clingo_sys::clingo_symbolic_atoms_iterator_is_equal_to(atoms, iter, end, &mut equal)
         })?;
 
-        if equal {
-            return Ok(None);
-        }
+        if equal { Ok(None) } else { Ok(Some((atoms, iter))) }
+    }
 
+    /// Look up the program literal for a ground atom symbol.
+    ///
+    /// Returns `None` if the symbol doesn't appear in the ground program.
+    fn literal_for_symbol(
+        &self,
+        symbol: Symbol,
+    ) -> Result<Option<clingo_sys::clingo_literal_t>, ClingoError> {
+        let Some((atoms, iter)) = self.find_symbolic_atom(symbol)? else {
+            return Ok(None);
+        };
         let mut literal: clingo_sys::clingo_literal_t = 0;
         check(unsafe { clingo_sys::clingo_symbolic_atoms_literal(atoms, iter, &mut literal) })?;
-
         Ok(Some(literal))
+    }
+
+    /// Check whether a ground atom is a fact (unconditionally true).
+    ///
+    /// Returns `None` if the symbol doesn't appear in the ground program.
+    pub fn is_fact(&self, symbol: Symbol) -> Result<Option<bool>, ClingoError> {
+        let Some((atoms, iter)) = self.find_symbolic_atom(symbol)? else {
+            return Ok(None);
+        };
+        let mut fact = false;
+        check(unsafe { clingo_sys::clingo_symbolic_atoms_is_fact(atoms, iter, &mut fact) })?;
+        Ok(Some(fact))
     }
 
     /// Iterate over all ground atoms matching a predicate name and arity,

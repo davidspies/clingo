@@ -1,4 +1,4 @@
-use clingo::{Control, F0, Fun, Symbolic};
+use clingo::{Control, F0, Fun, Symbol, Symbolic};
 
 #[test]
 fn iterate_atoms_by_signature() {
@@ -63,4 +63,25 @@ fn atoms_no_matches() {
 
     let result: Vec<Fun<i32>> = ctl.atoms("nonexistent").unwrap();
     assert!(result.is_empty());
+}
+
+#[test]
+fn is_fact() {
+    let mut ctl = Control::new(&[]).unwrap();
+    ctl.add("base", &[], "a. b :- a. {c}.").unwrap();
+    ctl.ground_base().unwrap();
+
+    let a = Symbol::id("a", true).unwrap();
+    let b = Symbol::id("b", true).unwrap();
+    let c = Symbol::id("c", true).unwrap();
+    let z = Symbol::id("z", true).unwrap();
+
+    // a is a fact (unconditional)
+    assert_eq!(ctl.is_fact(a).unwrap(), Some(true));
+    // b is derived from a, which is a fact — so b is also a fact
+    assert_eq!(ctl.is_fact(b).unwrap(), Some(true));
+    // c is a choice — not a fact
+    assert_eq!(ctl.is_fact(c).unwrap(), Some(false));
+    // z doesn't exist
+    assert_eq!(ctl.is_fact(z).unwrap(), None);
 }
