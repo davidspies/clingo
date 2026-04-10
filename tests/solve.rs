@@ -1,4 +1,4 @@
-use clingo::{Control, Error, ShowType, Symbol};
+use clingo::{Control, ShowType, Symbol};
 
 #[test]
 fn solve_simple() {
@@ -6,24 +6,21 @@ fn solve_simple() {
     ctl.add("base", &[], "a. b :- a.").unwrap();
     ctl.ground_base().unwrap();
 
+    let mut handle = ctl.solve_iter().unwrap();
     let mut models = Vec::new();
-    let result = ctl
-        .solve(|model| {
-            let syms = model.symbols(ShowType::Shown)?;
-            models.push(syms);
-            Ok(true)
-        })
-        .unwrap();
+    while let Some(model) = handle.next_model().unwrap() {
+        models.push(model.symbols(ShowType::Shown).unwrap());
+    }
+    let result = handle.close().unwrap();
 
     assert!(result.satisfiable);
     assert!(result.exhausted);
     assert_eq!(models.len(), 1);
 
-    let syms = &models[0];
     let a = Symbol::id("a", true).unwrap();
     let b = Symbol::id("b", true).unwrap();
-    assert!(syms.contains(&a));
-    assert!(syms.contains(&b));
+    assert!(models[0].contains(&a));
+    assert!(models[0].contains(&b));
 }
 
 #[test]
@@ -32,17 +29,15 @@ fn solve_multiple_models() {
     ctl.add("base", &[], "{a}. {b}.").unwrap();
     ctl.ground_base().unwrap();
 
+    let mut handle = ctl.solve_iter().unwrap();
     let mut count = 0;
-    let result = ctl
-        .solve(|_model| {
-            count += 1;
-            Ok(true)
-        })
-        .unwrap();
+    while handle.next_model().unwrap().is_some() {
+        count += 1;
+    }
+    let result = handle.close().unwrap();
 
     assert!(result.satisfiable);
     assert!(result.exhausted);
-    // {a}. {b}. has 4 answer sets: {}, {a}, {b}, {a,b}
     assert_eq!(count, 4);
 }
 
@@ -52,17 +47,13 @@ fn solve_stop_early() {
     ctl.add("base", &[], "{a}. {b}. {c}.").unwrap();
     ctl.ground_base().unwrap();
 
-    let mut count = 0;
-    let result = ctl
-        .solve(|_model| {
-            count += 1;
-            Ok(false) // stop after first model
-        })
-        .unwrap();
-
+    let mut handle = ctl.solve_iter().unwrap();
+    let model = handle.next_model().unwrap();
+    assert!(model.is_some());
+    // drop handle without exhausting — stops early
+    let result = handle.close().unwrap();
     assert!(result.satisfiable);
     assert!(!result.exhausted);
-    assert_eq!(count, 1);
 }
 
 #[test]
@@ -71,16 +62,10 @@ fn solve_unsat() {
     ctl.add("base", &[], "a. :- a.").unwrap();
     ctl.ground_base().unwrap();
 
-    let mut count = 0;
-    let result = ctl
-        .solve(|_model| {
-            count += 1;
-            Ok(true)
-        })
-        .unwrap();
-
+    let mut handle = ctl.solve_iter().unwrap();
+    assert!(handle.next_model().unwrap().is_none());
+    let result = handle.close().unwrap();
     assert!(result.unsatisfiable);
-    assert_eq!(count, 0);
 }
 
 #[test]
@@ -92,12 +77,10 @@ fn model_contains() {
     let a = Symbol::id("a", true).unwrap();
     let c = Symbol::id("c", true).unwrap();
 
-    ctl.solve(|model| {
-        assert!(model.contains(a)?);
-        assert!(!model.contains(c)?);
-        Ok(true)
-    })
-    .unwrap();
+    let mut handle = ctl.solve_iter().unwrap();
+    let model = handle.next_model().unwrap().unwrap();
+    assert!(model.contains(a).unwrap());
+    assert!(!model.contains(c).unwrap());
 }
 
 #[test]
@@ -106,27 +89,12 @@ fn model_number() {
     ctl.add("base", &[], "{a}.").unwrap();
     ctl.ground_base().unwrap();
 
+    let mut handle = ctl.solve_iter().unwrap();
     let mut numbers = Vec::new();
-    ctl.solve(|model| {
-        numbers.push(model.number()?);
-        Ok(true)
-    })
-    .unwrap();
+    while let Some(model) = handle.next_model().unwrap() {
+        numbers.push(model.number().unwrap());
+    }
 
     numbers.sort();
     assert_eq!(numbers, vec![1, 2]);
-}
-
-#[test]
-fn callback_error_propagates() {
-    let mut ctl = Control::new(&[]).unwrap();
-    ctl.add("base", &[], "a.").unwrap();
-    ctl.ground_base().unwrap();
-
-    let result: Result<_, Error> = ctl.solve(|_model| {
-        // CString::new with an interior NUL byte produces a NulError
-        Err(std::ffi::CString::new("ab\0cd").unwrap_err().into())
-    });
-
-    assert!(result.is_err());
 }

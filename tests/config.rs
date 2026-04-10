@@ -27,13 +27,14 @@ fn config_affects_solve() {
     // Set models=0 via configuration instead of command-line arg
     let mut cfg = ctl.configuration().unwrap();
     cfg.set("solve.models", "0").unwrap();
+    drop(cfg);
 
+    let mut handle = ctl.solve_iter().unwrap();
     let mut count = 0;
-    ctl.solve(|_| {
+    while handle.next_model().unwrap().is_some() {
         count += 1;
-        Ok(true)
-    })
-    .unwrap();
+    }
+    handle.close().unwrap();
     assert_eq!(count, 4);
 }
 
@@ -50,7 +51,6 @@ fn config_description() {
 fn config_array_access() {
     let mut ctl = Control::new(&[]).unwrap();
     let cfg = ctl.configuration().unwrap();
-    // solver is an array (one entry per thread)
     let solver0 = cfg.map_at("solver").unwrap().array_at(0).unwrap();
     let desc = solver0.description().unwrap();
     assert!(!desc.is_empty());

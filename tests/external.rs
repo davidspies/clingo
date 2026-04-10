@@ -6,27 +6,23 @@ fn assign_external_true() {
     ctl.add("base", &[], "#external a. b :- a.").unwrap();
     ctl.ground_base().unwrap();
 
-    // With a=free, both {}, {a,b} are possible, but by default external is false
+    // Default: external is false, so just one empty model
+    let mut handle = ctl.solve_iter().unwrap();
     let mut count = 0;
-    ctl.solve(|_| {
+    while handle.next_model().unwrap().is_some() {
         count += 1;
-        Ok(true)
-    })
-    .unwrap();
-    assert_eq!(count, 1); // just the empty model
+    }
+    handle.close().unwrap();
+    assert_eq!(count, 1);
 
     // Assign a=true
     let a = Symbol::id("a", true).unwrap();
     assert!(ctl.assign_external(a, TruthValue::True).unwrap());
 
-    let mut found_a = false;
-    ctl.solve(|model| {
-        let syms = model.symbols(ShowType::Shown)?;
-        found_a = syms.iter().any(|s| s.name() == Some("a"));
-        Ok(true)
-    })
-    .unwrap();
-    assert!(found_a);
+    let mut handle = ctl.solve_iter().unwrap();
+    let model = handle.next_model().unwrap().unwrap();
+    let syms = model.symbols(ShowType::Shown).unwrap();
+    assert!(syms.iter().any(|s| s.name() == Some("a")));
 }
 
 #[test]
@@ -42,12 +38,10 @@ fn assign_external_false() {
     ctl.assign_external(a, TruthValue::True).unwrap();
     ctl.assign_external(a, TruthValue::False).unwrap();
 
-    ctl.solve(|model| {
-        assert!(!model.contains(a)?);
-        assert!(!model.contains(b)?);
-        Ok(true)
-    })
-    .unwrap();
+    let mut handle = ctl.solve_iter().unwrap();
+    let model = handle.next_model().unwrap().unwrap();
+    assert!(!model.contains(a).unwrap());
+    assert!(!model.contains(b).unwrap());
 }
 
 #[test]
@@ -59,13 +53,12 @@ fn assign_external_free() {
     let a = Symbol::id("a", true).unwrap();
     ctl.assign_external(a, TruthValue::Free).unwrap();
 
-    // Free means solver decides — with {a} choice, we get 2 models
+    let mut handle = ctl.solve_iter().unwrap();
     let mut count = 0;
-    ctl.solve(|_| {
+    while handle.next_model().unwrap().is_some() {
         count += 1;
-        Ok(true)
-    })
-    .unwrap();
+    }
+    handle.close().unwrap();
     assert_eq!(count, 2);
 }
 
@@ -78,15 +71,10 @@ fn release_external() {
     let a = Symbol::id("a", true).unwrap();
     assert!(ctl.release_external(a).unwrap());
 
-    // After release, a is no longer external — it's just false
-    let mut count = 0;
-    ctl.solve(|model| {
-        assert!(!model.contains(a)?);
-        count += 1;
-        Ok(true)
-    })
-    .unwrap();
-    assert_eq!(count, 1);
+    let mut handle = ctl.solve_iter().unwrap();
+    let model = handle.next_model().unwrap().unwrap();
+    assert!(!model.contains(a).unwrap());
+    assert!(handle.next_model().unwrap().is_none());
 }
 
 #[test]

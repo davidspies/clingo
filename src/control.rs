@@ -4,7 +4,7 @@ use std::ptr;
 
 use crate::config::Configuration;
 use crate::error::{ClingoError, Error, check};
-use crate::solve::{Model, SolveResult, solve_with_callback};
+use crate::solve::{SolveHandle, solve_yielding};
 use crate::symbol::Symbol;
 
 /// Warning codes from the clingo logger.
@@ -196,14 +196,12 @@ impl Control {
         self.ground(&[("base", &[])])
     }
 
-    /// Solve the program, calling `on_model` for each model found.
+    /// Solve the program, returning a handle for iterating models one at a time.
     ///
-    /// The callback returns `Ok(true)` to continue searching or `Ok(false)` to stop.
-    pub fn solve(
-        &mut self,
-        on_model: impl FnMut(&Model) -> Result<bool, Error>,
-    ) -> Result<SolveResult, Error> {
-        solve_with_callback(self.ptr.as_ptr(), on_model)
+    /// The handle borrows the control mutably. Call `next_model()` to advance,
+    /// then `close()` to get the final result.
+    pub fn solve_iter(&mut self) -> Result<SolveHandle<'_>, ClingoError> {
+        unsafe { solve_yielding(self.ptr.as_ptr()) }
     }
 
     /// Get the configuration object for reading and modifying solver settings.

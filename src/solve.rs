@@ -1,7 +1,8 @@
-use std::os::raw::c_void;
+use std::marker::PhantomData;
 use std::ptr;
 
-use crate::error::{ClingoError, Error, check};
+use crate::control::Control;
+use crate::error::{ClingoError, check};
 use crate::symbol::Symbol;
 
 /// The result of a solve call.
@@ -109,78 +110,79 @@ impl Model {
     }
 }
 
-/// State passed through the C callback trampoline.
-struct CallbackState<'a> {
-    closure: &'a mut dyn FnMut(&Model) -> Result<bool, Error>,
-    error: Option<Error>,
-}
-
-/// C-compatible trampoline that forwards to the Rust closure.
-unsafe extern "C" fn solve_trampoline(
-    type_: clingo_sys::clingo_solve_event_type_t,
-    event: *mut c_void,
-    data: *mut c_void,
-    goon: *mut bool,
-) -> bool {
-    let state = unsafe { &mut *(data as *mut CallbackState) };
-
-    if type_ != clingo_sys::clingo_solve_event_type_e_clingo_solve_event_type_model {
-        return true;
-    }
-
-    let model = Model::from_ptr(event as *const clingo_sys::clingo_model_t);
-
-    match (state.closure)(&model) {
-        Ok(cont) => {
-            unsafe { *goon = cont };
-            true
-        }
-        Err(e) => {
-            state.error = Some(e);
-            unsafe { *goon = false };
-            true
-        }
-    }
-}
-
-/// Solve the program, calling `on_model` for each model found.
+/// A handle for iterating over models one at a time (yield mode).
 ///
-/// Returns the final solve result. The callback receives a `&Model` and
-/// returns `Ok(true)` to continue searching or `Ok(false)` to stop.
-pub(crate) fn solve_with_callback(
-    control_ptr: *mut clingo_sys::clingo_control_t,
-    mut on_model: impl FnMut(&Model) -> Result<bool, Error>,
-) -> Result<SolveResult, Error> {
-    let mut state = CallbackState {
-        closure: &mut on_model,
-        error: None,
-    };
+/// Borrows the `Control` mutably, preventing concurrent access.
+/// Call [`next_model`](Self::next_model) to advance, then
+/// [`close`](Self::close) to get the final result.
+/// If dropped without calling `close`, the handle is closed automatically
+/// (but the result is discarded).
+pub struct SolveHandle<'a> {
+    handle: *mut clingo_sys::clingo_solve_handle_t,
+    model: Model,
+    _control: PhantomData<&'a mut Control>,
+}
 
+impl Drop for SolveHandle<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            clingo_sys::clingo_solve_handle_close(self.handle);
+        }
+    }
+}
+
+impl<'a> SolveHandle<'a> {
+    /// Advance to the next model.
+    ///
+    /// Returns `None` when there are no more models. The returned `&Model`
+    /// borrows this handle, so you must drop it before calling `next_model`
+    /// again.
+    pub fn next_model(&mut self) -> Result<Option<&Model>, ClingoError> {
+        check(unsafe { clingo_sys::clingo_solve_handle_resume(self.handle) })?;
+
+        let mut model_ptr: *const clingo_sys::clingo_model_t = ptr::null();
+        check(unsafe { clingo_sys::clingo_solve_handle_model(self.handle, &mut model_ptr) })?;
+
+        if model_ptr.is_null() {
+            return Ok(None);
+        }
+
+        self.model = Model::from_ptr(model_ptr);
+        Ok(Some(&self.model))
+    }
+
+    /// Close the handle and return the final solve result.
+    ///
+    /// This consumes the handle. If you just drop it, the result is discarded.
+    pub fn close(self) -> Result<SolveResult, ClingoError> {
+        let mut result_bits: u32 = 0;
+        check(unsafe { clingo_sys::clingo_solve_handle_get(self.handle, &mut result_bits) })?;
+        // Drop will call clingo_solve_handle_close
+        Ok(SolveResult::from_bitset(result_bits))
+    }
+}
+
+/// # Safety
+/// `control_ptr` must be valid for `'a` and exclusively borrowed for that lifetime.
+pub(crate) unsafe fn solve_yielding<'a>(
+    control_ptr: *mut clingo_sys::clingo_control_t,
+) -> Result<SolveHandle<'a>, ClingoError> {
     let mut handle: *mut clingo_sys::clingo_solve_handle_t = ptr::null_mut();
     check(unsafe {
         clingo_sys::clingo_control_solve(
             control_ptr,
-            0, // synchronous, no yield
+            clingo_sys::clingo_solve_mode_e_clingo_solve_mode_yield,
             ptr::null(),
             0,
-            Some(solve_trampoline),
-            &mut state as *mut CallbackState as *mut c_void,
+            None,
+            ptr::null_mut(),
             &mut handle,
         )
     })?;
 
-    // Block until solving is done, then always close the handle.
-    let mut result_bits: u32 = 0;
-    let get_ok = unsafe { clingo_sys::clingo_solve_handle_get(handle, &mut result_bits) };
-    let close_ok = unsafe { clingo_sys::clingo_solve_handle_close(handle) };
-
-    // Callback errors take priority over clingo errors.
-    if let Some(e) = state.error {
-        return Err(e);
-    }
-
-    check(get_ok)?;
-    check(close_ok)?;
-
-    Ok(SolveResult::from_bitset(result_bits))
+    Ok(SolveHandle {
+        handle,
+        model: Model::from_ptr(ptr::null()),
+        _control: PhantomData,
+    })
 }
