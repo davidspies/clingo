@@ -273,7 +273,11 @@ impl Control {
             clingo_sys::clingo_symbolic_atoms_iterator_is_equal_to(atoms, iter, end, &mut equal)
         })?;
 
-        if equal { Ok(None) } else { Ok(Some((atoms, iter))) }
+        if equal {
+            Ok(None)
+        } else {
+            Ok(Some((atoms, iter)))
+        }
     }
 
     /// Look up the program literal for a ground atom symbol.
@@ -309,7 +313,7 @@ impl Control {
     ///
     /// This uses the symbolic atoms table, so it works on `&self` and can
     /// be called through `SolveHandle::control()`.
-    pub fn atoms<Args: SymbolicArgs>(&self, name: &str) -> Result<Vec<Fun<Args>>, Error> {
+    pub fn atoms<Args: SymbolicArgs>(&self, name: &str) -> Result<Vec<Args>, Error> {
         let c_name = CString::new(name)?;
         let arity = Args::arity() as u32;
 
@@ -352,7 +356,8 @@ impl Control {
             })?;
 
             let symbol = unsafe { Symbol::from_raw(sym) };
-            if let Some(fun) = symbol.as_fun::<Args>() {
+            if let Some(Fun(n, fun)) = symbol.as_fun::<Args>() {
+                assert_eq!(n, name);
                 results.push(fun);
             }
 

@@ -36,8 +36,7 @@ fn atoms_during_solve() {
     while handle.next_model().unwrap().is_some() {
         let model = handle.current_model().unwrap();
         let edges = handle.control().atoms::<(i32, i32)>("edge").unwrap();
-        for &Fun(name, (a, b)) in &edges {
-            assert_eq!(name, "edge");
+        for &(a, b) in &edges {
             let sym = Fun("path", (a, b)).to_symbol();
             let _in_model = model.contains(sym).unwrap();
         }
