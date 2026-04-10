@@ -2,7 +2,7 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ptr;
 
-use crate::error::{Error, check};
+use crate::error::{ClingoError, Error, check};
 use crate::solve::{Model, SolveResult, solve_with_callback};
 use crate::symbol::Symbol;
 
@@ -133,5 +133,83 @@ impl Control {
         on_model: impl FnMut(&Model) -> Result<bool, Error>,
     ) -> Result<SolveResult, Error> {
         solve_with_callback(self.ptr.as_ptr(), on_model)
+    }
+
+    /// Look up the program literal for a ground atom symbol.
+    ///
+    /// Returns `None` if the symbol doesn't appear in the ground program.
+    fn literal_for_symbol(
+        &self,
+        symbol: Symbol,
+    ) -> Result<Option<clingo_sys::clingo_literal_t>, ClingoError> {
+        let mut atoms: *const clingo_sys::clingo_symbolic_atoms_t = ptr::null();
+        check(unsafe { clingo_sys::clingo_control_symbolic_atoms(self.ptr.as_ptr(), &mut atoms) })?;
+
+        let mut iter: clingo_sys::clingo_symbolic_atom_iterator_t = 0;
+        check(unsafe { clingo_sys::clingo_symbolic_atoms_find(atoms, symbol.raw(), &mut iter) })?;
+
+        let mut end: clingo_sys::clingo_symbolic_atom_iterator_t = 0;
+        check(unsafe { clingo_sys::clingo_symbolic_atoms_end(atoms, &mut end) })?;
+
+        let mut equal = false;
+        check(unsafe {
+            clingo_sys::clingo_symbolic_atoms_iterator_is_equal_to(atoms, iter, end, &mut equal)
+        })?;
+
+        if equal {
+            return Ok(None);
+        }
+
+        let mut literal: clingo_sys::clingo_literal_t = 0;
+        check(unsafe { clingo_sys::clingo_symbolic_atoms_literal(atoms, iter, &mut literal) })?;
+
+        Ok(Some(literal))
+    }
+
+    /// Assign a truth value to an external atom.
+    ///
+    /// The atom must have been declared with `#external` in the program.
+    /// Returns `Ok(false)` if the symbol doesn't appear in the ground program.
+    pub fn assign_external(&mut self, symbol: Symbol, value: TruthValue) -> Result<bool, Error> {
+        let Some(literal) = self.literal_for_symbol(symbol)? else {
+            return Ok(false);
+        };
+        check(unsafe {
+            clingo_sys::clingo_control_assign_external(self.ptr.as_ptr(), literal, value.to_raw())
+        })?;
+        Ok(true)
+    }
+
+    /// Release an external atom, making it no longer external.
+    ///
+    /// After this, the atom is subject to normal program simplification.
+    /// Returns `Ok(false)` if the symbol doesn't appear in the ground program.
+    pub fn release_external(&mut self, symbol: Symbol) -> Result<bool, Error> {
+        let Some(literal) = self.literal_for_symbol(symbol)? else {
+            return Ok(false);
+        };
+        check(unsafe { clingo_sys::clingo_control_release_external(self.ptr.as_ptr(), literal) })?;
+        Ok(true)
+    }
+}
+
+/// Truth value for external atoms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TruthValue {
+    /// Let the solver decide.
+    Free,
+    /// Assign true.
+    True,
+    /// Assign false.
+    False,
+}
+
+impl TruthValue {
+    fn to_raw(self) -> clingo_sys::clingo_truth_value_t {
+        match self {
+            TruthValue::Free => clingo_sys::clingo_truth_value_e_clingo_truth_value_free as i32,
+            TruthValue::True => clingo_sys::clingo_truth_value_e_clingo_truth_value_true as i32,
+            TruthValue::False => clingo_sys::clingo_truth_value_e_clingo_truth_value_false as i32,
+        }
     }
 }
