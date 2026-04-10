@@ -2,6 +2,7 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ptr;
 
+use crate::config::Configuration;
 use crate::error::{ClingoError, Error, check};
 use crate::solve::{Model, SolveResult, solve_with_callback};
 use crate::symbol::Symbol;
@@ -133,6 +134,15 @@ impl Control {
         on_model: impl FnMut(&Model) -> Result<bool, Error>,
     ) -> Result<SolveResult, Error> {
         solve_with_callback(self.ptr.as_ptr(), on_model)
+    }
+
+    /// Get the configuration object for reading and modifying solver settings.
+    pub fn configuration(&mut self) -> Result<Configuration<'_>, ClingoError> {
+        let mut cfg: *mut clingo_sys::clingo_configuration_t = ptr::null_mut();
+        check(unsafe { clingo_sys::clingo_control_configuration(self.ptr.as_ptr(), &mut cfg) })?;
+        let mut root: clingo_sys::clingo_id_t = 0;
+        check(unsafe { clingo_sys::clingo_configuration_root(cfg, &mut root) })?;
+        Ok(unsafe { Configuration::new(cfg, root) })
     }
 
     /// Look up the program literal for a ground atom symbol.
