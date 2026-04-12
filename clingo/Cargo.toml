@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 clingo-sys = { workspace = true }
+clingo-derive = { path = "../clingo-derive" }
 
 [features]
 default = ["static-linking"]
