@@ -370,10 +370,14 @@ impl Control {
             })?;
 
             let symbol = unsafe { Symbol::from_raw(sym) };
-            if let Some(Fun(n, fun)) = symbol.as_fun::<Args>() {
-                assert_eq!(n, name);
-                results.push((symbol, fun));
-            }
+            let Fun(n, fun) = symbol.as_fun::<Args>().ok_or_else(|| {
+                Error::TypeMismatch(format!(
+                    "atom {} does not match expected argument types",
+                    symbol.to_string_lossy().unwrap_or_else(|_| "?".into()),
+                ))
+            })?;
+            assert_eq!(n, name);
+            results.push((symbol, fun));
 
             check(unsafe { clingo_sys::clingo_symbolic_atoms_next(atoms_table, iter, &mut iter) })?;
         }

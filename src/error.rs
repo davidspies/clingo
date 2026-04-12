@@ -33,6 +33,7 @@ impl std::error::Error for ClingoError {}
 pub enum Error {
     Clingo(ClingoError),
     NulByte(NulError),
+    TypeMismatch(String),
 }
 
 impl fmt::Display for Error {
@@ -40,6 +41,7 @@ impl fmt::Display for Error {
         match self {
             Error::Clingo(e) => e.fmt(f),
             Error::NulByte(e) => e.fmt(f),
+            Error::TypeMismatch(msg) => write!(f, "type mismatch: {}", msg),
         }
     }
 }
