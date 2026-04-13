@@ -1,4 +1,4 @@
-use clingo::{Control, ShowType, Symbol};
+use ringo::{Control, ShowType, Symbol};
 
 #[test]
 fn iterate_models() {

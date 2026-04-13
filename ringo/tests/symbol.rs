@@ -1,4 +1,4 @@
-use clingo::{F0, Fun, Symbol, SymbolType, SymbolValue, f0};
+use ringo::{F0, Fun, Symbol, SymbolType, SymbolValue, f0};
 use std::collections::HashSet;
 
 #[test]

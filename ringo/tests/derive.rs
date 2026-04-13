@@ -1,4 +1,4 @@
-use clingo::{Symbol, Symbolic};
+use ringo::{Symbol, Symbolic};
 
 #[derive(Debug, PartialEq, Symbolic)]
 struct MyPred(i32, i32);

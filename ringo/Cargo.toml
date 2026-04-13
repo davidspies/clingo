@@ -1,11 +1,11 @@
 [package]
-name = "clingo"
+name = "ringo"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 clingo-sys = { workspace = true }
-clingo-derive = { path = "../clingo-derive" }
+ringo-derive = { path = "../ringo-derive" }
 
 [features]
 default = ["static-linking"]

@@ -1,4 +1,4 @@
-use clingo::{Control, ShowType, Symbol, TruthValue};
+use ringo::{Control, ShowType, Symbol, TruthValue};
 
 #[test]
 fn assign_external_true() {

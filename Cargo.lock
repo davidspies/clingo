@@ -13,23 +13,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clingo"
-version = "0.1.0"
-dependencies = [
- "clingo-derive",
- "clingo-sys",
-]
-
-[[package]]
-name = "clingo-derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "clingo-sys"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -76,6 +59,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "ringo"
+version = "0.1.0"
+dependencies = [
+ "clingo-sys",
+ "ringo-derive",
+]
+
+[[package]]
+name = "ringo-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

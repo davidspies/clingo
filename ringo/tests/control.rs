@@ -1,4 +1,4 @@
-use clingo::{Control, Symbol};
+use ringo::{Control, Symbol};
 
 #[test]
 fn create_and_drop() {

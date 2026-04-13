@@ -1,4 +1,4 @@
-use clingo::Control;
+use ringo::Control;
 
 #[test]
 fn read_config() {

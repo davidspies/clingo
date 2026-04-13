@@ -6,7 +6,7 @@ mod observer;
 mod solve;
 mod symbol;
 
-pub use clingo_derive::Symbolic;
+pub use ringo_derive::Symbolic;
 pub use config::Configuration;
 pub use control::{Control, TruthValue, Warning};
 pub use error::{ClingoError, ClingoErrorCode, Error};
