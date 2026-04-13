@@ -1,11 +1,11 @@
-use std::{cell::OnceCell, collections::HashMap};
+use std::cell::OnceCell;
 
-use crate::{ClingoError, Error, SymbolicFun, symbol::Symbol};
+use crate::{ClingoError, Error, SymbolicFun, solve::ModelCache, symbol::Symbol};
 
 use super::{ShowType, raw_model::RawModel};
 
 pub struct Model {
-    cache: OnceCell<HashMap<(&'static str, usize), Vec<Symbol>>>,
+    cache: OnceCell<ModelCache>,
     raw: RawModel,
 }
 impl Model {
@@ -38,29 +38,31 @@ impl Model {
     }
 
     pub fn atoms<T: SymbolicFun>(&self) -> Result<Vec<T>, Error> {
+        self.cache()?.atoms()
+    }
+
+    /// Get a borrowed reference to this model's [`ModelCache`], building it on
+    /// first access.
+    ///
+    /// The cache is populated lazily from all shown symbols. To obtain an
+    /// *owned* cache that outlives the solver, use
+    /// [`SolveHandle::take_model_cache`](super::SolveHandle::take_model_cache).
+    pub fn cache(&self) -> Result<&ModelCache, Error> {
+        self.build_cache()?;
+        Ok(self.cache.get().unwrap())
+    }
+
+    pub(super) fn take_cache(&mut self) -> Result<ModelCache, Error> {
+        self.build_cache()?;
+        Ok(self.cache.take().unwrap())
+    }
+
+    fn build_cache(&self) -> Result<(), Error> {
         if self.cache.get().is_none() {
             self.cache
-                .set(build_index(self.symbols(ShowType::All)?))
+                .set(ModelCache::from_symbols(self.symbols(ShowType::All)?))
                 .unwrap();
         }
-        let cache = self.cache.get().unwrap();
-        let signature = T::signature();
-        let Some(atoms) = cache.get(&signature) else {
-            return Ok(vec![]);
-        };
-        atoms
-            .iter()
-            .map(|&sym| T::from_symbol_result(sym))
-            .collect()
+        Ok(())
     }
-}
-
-#[track_caller]
-fn build_index(symbols: Vec<Symbol>) -> HashMap<(&'static str, usize), Vec<Symbol>> {
-    let mut map: HashMap<(&'static str, usize), Vec<Symbol>> = HashMap::new();
-    for sym in symbols {
-        let key = (sym.name().unwrap(), sym.arity().unwrap());
-        map.entry(key).or_default().push(sym)
-    }
-    map
 }

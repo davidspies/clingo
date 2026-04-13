@@ -1,13 +1,16 @@
+mod cache;
 mod model;
 mod raw_model;
 
 use std::ptr;
 
+use crate::Error;
 use crate::control::Control;
 use crate::error::{ClingoError, check};
 
 use self::raw_model::RawModel;
 
+pub use self::cache::ModelCache;
 pub use self::model::Model;
 
 /// The result of a solve call.
@@ -117,6 +120,19 @@ impl<'a> SolveHandle<'a> {
     /// simultaneously access [`control()`](Self::control).
     pub fn current_model(&self) -> Option<&Model> {
         self.model.as_ref()
+    }
+
+    /// Take ownership of the current model's [`ModelCache`].
+    ///
+    /// The returned `ModelCache` is `Clone + Send + Sync` and can safely be retained
+    /// after subsequent calls to [`next_model`](Self::next_model) or after
+    /// the `SolveHandle` is dropped. Returns `None` if there is no current
+    /// model.
+    pub fn take_model_cache(&mut self) -> Result<Option<ModelCache>, Error> {
+        let Some(model) = self.model.as_mut() else {
+            return Ok(None);
+        };
+        Ok(Some(model.take_cache()?))
     }
 
     /// Close the handle and return the final solve result.
