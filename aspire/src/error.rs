@@ -1,6 +1,8 @@
 use std::ffi::{CStr, NulError};
 use std::fmt;
 
+use crate::symbol::Symbol;
+
 /// Error codes returned by the clingo C library.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClingoErrorCode {
@@ -34,6 +36,15 @@ pub enum Error {
     Clingo(ClingoError),
     NulByte(NulError),
     TypeMismatch(String),
+}
+
+impl Error {
+    pub(crate) fn type_mismatch(symbol: Symbol) -> Error {
+        Error::TypeMismatch(format!(
+            "atom {} does not match expected argument types",
+            symbol.to_string_lossy().unwrap_or_else(|_| "?".into()),
+        ))
+    }
 }
 
 impl fmt::Display for Error {

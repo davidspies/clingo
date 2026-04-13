@@ -1,4 +1,4 @@
-use aspire::{Control, ShowType, Symbol};
+use aspire::{Control, Error, ShowType, Symbol, Symbolic};
 
 #[test]
 fn solve_simple() {
@@ -97,4 +97,86 @@ fn model_number() {
 
     numbers.sort();
     assert_eq!(numbers, vec![1, 2]);
+}
+
+#[derive(Debug, PartialEq, Symbolic)]
+struct Edge(i32, i32);
+
+#[derive(Debug, PartialEq, Symbolic)]
+struct Node(i32);
+
+#[test]
+fn model_atoms() {
+    let mut ctl = Control::new(&["0"]).unwrap();
+    ctl.add(
+        "base",
+        &[],
+        "edge(1,2). edge(2,3). node(1). node(2). node(3).",
+    )
+    .unwrap();
+    ctl.ground_base().unwrap();
+
+    let mut handle = ctl.solve_iter().unwrap();
+    let model = handle.next_model().unwrap().unwrap();
+
+    let edges: Vec<Edge> = model.atoms().unwrap();
+    assert_eq!(edges.len(), 2);
+    assert!(edges.contains(&Edge(1, 2)));
+    assert!(edges.contains(&Edge(2, 3)));
+
+    let nodes: Vec<Node> = model.atoms().unwrap();
+    assert_eq!(nodes.len(), 3);
+}
+
+#[test]
+fn model_atoms_no_matches() {
+    let mut ctl = Control::new(&[]).unwrap();
+    ctl.add("base", &[], "a. b.").unwrap();
+    ctl.ground_base().unwrap();
+
+    let mut handle = ctl.solve_iter().unwrap();
+    let model = handle.next_model().unwrap().unwrap();
+
+    let edges: Vec<Edge> = model.atoms().unwrap();
+    assert!(edges.is_empty());
+}
+
+#[test]
+fn model_atoms_with_choice() {
+    let mut ctl = Control::new(&["0"]).unwrap();
+    ctl.add(
+        "base",
+        &[],
+        "node(1). node(2). {edge(X,Y)} :- node(X), node(Y).",
+    )
+    .unwrap();
+    ctl.ground_base().unwrap();
+
+    let mut handle = ctl.solve_iter().unwrap();
+    while let Some(model) = handle.next_model().unwrap() {
+        let edges: Vec<Edge> = model.atoms().unwrap();
+        let nodes: Vec<Node> = model.atoms().unwrap();
+        // Every model should have exactly 2 nodes
+        assert_eq!(nodes.len(), 2);
+        // Edges vary per model but should all parse correctly
+        for Edge(a, b) in &edges {
+            assert!(*a >= 1 && *a <= 2);
+            assert!(*b >= 1 && *b <= 2);
+        }
+    }
+    handle.close().unwrap();
+}
+
+#[test]
+fn from_symbol_result_error() {
+    // A symbol with wrong structure for the target type should give a TypeMismatch error
+    let sym = Symbol::parse("edge(1,2,3)").unwrap(); // arity 3, but Edge expects 2
+    let result = Edge::from_symbol_result(sym);
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        Error::TypeMismatch(msg) => {
+            assert!(msg.contains("edge(1,2,3)"), "message was: {msg}");
+        }
+        other => panic!("expected TypeMismatch, got: {other:?}"),
+    }
 }

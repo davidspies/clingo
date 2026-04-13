@@ -13,6 +13,9 @@ pub fn f0(name: &'static str) -> F0 {
 pub trait Symbolic: Sized {
     fn from_symbol(sym: Symbol) -> Option<Self>;
     fn to_symbol(&self) -> Symbol;
+    fn from_symbol_result(sym: Symbol) -> Result<Self, crate::Error> {
+        Self::from_symbol(sym).ok_or(crate::Error::type_mismatch(sym))
+    }
 }
 
 pub trait SymbolicFun: Symbolic {

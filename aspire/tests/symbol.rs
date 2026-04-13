@@ -154,3 +154,21 @@ fn parse() {
 
     assert!(Symbol::parse("not valid!!!").is_err());
 }
+
+#[test]
+fn arity() {
+    let id = Symbol::id("a", true).unwrap();
+    assert_eq!(id.arity(), Some(0));
+
+    let f1 = Symbol::function("f", &[Symbol::number(1)], true).unwrap();
+    assert_eq!(f1.arity(), Some(1));
+
+    let f2 = Symbol::function("edge", &[Symbol::number(1), Symbol::number(2)], true).unwrap();
+    assert_eq!(f2.arity(), Some(2));
+
+    // non-function types have no arity
+    assert_eq!(Symbol::number(42).arity(), None);
+    assert_eq!(Symbol::string("hi").unwrap().arity(), None);
+    assert_eq!(Symbol::infimum().arity(), None);
+    assert_eq!(Symbol::supremum().arity(), None);
+}

@@ -371,12 +371,7 @@ impl Control {
             })?;
 
             let symbol = unsafe { Symbol::from_raw(sym) };
-            let f = F::from_symbol(symbol).ok_or_else(|| {
-                Error::TypeMismatch(format!(
-                    "atom {} does not match expected argument types",
-                    symbol.to_string_lossy().unwrap_or_else(|_| "?".into()),
-                ))
-            })?;
+            let f = F::from_symbol_result(symbol)?;
             results.push((symbol, f));
 
             check(unsafe { clingo_sys::clingo_symbolic_atoms_next(atoms_table, iter, &mut iter) })?;

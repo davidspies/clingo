@@ -188,14 +188,21 @@ impl Symbol {
 
     /// Get the arguments of a function symbol. Returns `None` if not a function.
     pub fn arguments(self) -> Option<Vec<Symbol>> {
+        unsafe { self.gen_args(|raw| raw.iter().map(|&s| Symbol(s)).collect()) }
+    }
+
+    pub fn arity(self) -> Option<usize> {
+        unsafe { self.gen_args(|raw| raw.len()) }
+    }
+
+    unsafe fn gen_args<T>(self, f: impl Fn(&[u64]) -> T) -> Option<T> {
         let mut ptr: *const clingo_sys::clingo_symbol_t = ptr::null();
         let mut len: usize = 0;
         if unsafe { clingo_sys::clingo_symbol_arguments(self.0, &mut ptr, &mut len) } {
             if len == 0 {
-                return Some(vec![]);
+                return Some(f(&[]));
             }
-            let raw = unsafe { std::slice::from_raw_parts(ptr, len) };
-            Some(raw.iter().map(|&s| Symbol(s)).collect())
+            Some(f(unsafe { std::slice::from_raw_parts(ptr, len) }))
         } else {
             None
         }

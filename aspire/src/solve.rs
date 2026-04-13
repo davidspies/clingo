@@ -1,8 +1,14 @@
+mod model;
+mod raw_model;
+
 use std::ptr;
 
 use crate::control::Control;
 use crate::error::{ClingoError, check};
-use crate::symbol::Symbol;
+
+use self::raw_model::RawModel;
+
+pub use self::model::Model;
 
 /// The result of a solve call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,60 +61,6 @@ impl ShowType {
     }
 }
 
-/// A model found during solving. Only valid for the duration of the callback.
-pub struct Model {
-    ptr: *const clingo_sys::clingo_model_t,
-}
-
-impl Model {
-    pub(crate) fn from_ptr(ptr: *const clingo_sys::clingo_model_t) -> Self {
-        Model { ptr }
-    }
-
-    /// Get the symbols in this model matching the given show type.
-    pub fn symbols(&self, show: ShowType) -> Result<Vec<Symbol>, ClingoError> {
-        let bits = show.to_bitset();
-        let mut size: usize = 0;
-        check(unsafe { clingo_sys::clingo_model_symbols_size(self.ptr, bits, &mut size) })?;
-        let mut raw = vec![0u64; size];
-        check(unsafe { clingo_sys::clingo_model_symbols(self.ptr, bits, raw.as_mut_ptr(), size) })?;
-        Ok(raw
-            .into_iter()
-            .map(|s| unsafe { Symbol::from_raw(s) })
-            .collect())
-    }
-
-    /// Check whether a specific atom is in the model.
-    pub fn contains(&self, atom: Symbol) -> Result<bool, ClingoError> {
-        let mut contained = false;
-        check(unsafe { clingo_sys::clingo_model_contains(self.ptr, atom.raw(), &mut contained) })?;
-        Ok(contained)
-    }
-
-    /// Get the running number of this model.
-    pub fn number(&self) -> Result<u64, ClingoError> {
-        let mut n: u64 = 0;
-        check(unsafe { clingo_sys::clingo_model_number(self.ptr, &mut n) })?;
-        Ok(n)
-    }
-
-    /// Whether the optimality of this model has been proven.
-    pub fn optimality_proven(&self) -> Result<bool, ClingoError> {
-        let mut proven = false;
-        check(unsafe { clingo_sys::clingo_model_optimality_proven(self.ptr, &mut proven) })?;
-        Ok(proven)
-    }
-
-    /// Get the cost vector of this model.
-    pub fn cost(&self) -> Result<Vec<i64>, ClingoError> {
-        let mut size: usize = 0;
-        check(unsafe { clingo_sys::clingo_model_cost_size(self.ptr, &mut size) })?;
-        let mut costs = vec![0i64; size];
-        check(unsafe { clingo_sys::clingo_model_cost(self.ptr, costs.as_mut_ptr(), size) })?;
-        Ok(costs)
-    }
-}
-
 /// A handle for iterating over models one at a time (yield mode).
 ///
 /// Borrows the `Control` mutably, preventing concurrent access.
@@ -118,6 +70,7 @@ impl Model {
 /// (but the result is discarded).
 pub struct SolveHandle<'a> {
     handle: *mut clingo_sys::clingo_solve_handle_t,
+    // This should never be handed out by value since it becomes invalidated on each next_model call.
     model: Option<Model>,
     control: &'a mut Control,
 }
@@ -152,7 +105,7 @@ impl<'a> SolveHandle<'a> {
             self.model = None;
             Ok(None)
         } else {
-            self.model = Some(Model::from_ptr(model_ptr));
+            self.model = Some(Model::new(unsafe { RawModel::from_ptr(model_ptr) }));
             Ok(self.model.as_ref())
         }
     }
