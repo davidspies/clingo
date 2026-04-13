@@ -15,8 +15,11 @@ pub trait Symbolic: Sized {
     fn to_symbol(&self) -> Symbol;
 }
 
+pub trait SymbolicFun: Symbolic {
+    fn signature() -> (&'static str, usize);
+}
+
 pub trait SymbolicArgs: Sized {
-    fn arity() -> usize;
     fn from_symbols(syms: Vec<Symbol>) -> Option<Self>;
     fn to_symbols(&self) -> Vec<Symbol>;
 }
@@ -61,9 +64,6 @@ impl<Args: SymbolicArgs> Symbolic for Fun<Args> {
 }
 
 impl<T: Symbolic> SymbolicArgs for T {
-    fn arity() -> usize {
-        1
-    }
     fn from_symbols(syms: Vec<Symbol>) -> Option<Self> {
         if syms.len() == 1 {
             Some(T::from_symbol(syms[0])?)
@@ -77,9 +77,6 @@ impl<T: Symbolic> SymbolicArgs for T {
 }
 
 impl<T: Symbolic, const N: usize> SymbolicArgs for [T; N] {
-    fn arity() -> usize {
-        N
-    }
     fn from_symbols(syms: Vec<Symbol>) -> Option<Self> {
         if syms.len() == N {
             let ts: Option<Vec<T>> = syms.into_iter().map(T::from_symbol).collect();
@@ -99,9 +96,6 @@ impl<T: Symbolic, const N: usize> SymbolicArgs for [T; N] {
 macro_rules! impl_from_symbols_for_tuple {
     ($($T:ident),*) => {
         impl<$($T: Symbolic),*> SymbolicArgs for ($($T,)*) {
-            fn arity() -> usize {
-                <[&str]>::len(&[$(stringify!($T)),*])
-            }
             fn from_symbols(syms: Vec<Symbol>) -> Option<Self> {
                 let mut iter = syms.into_iter();
                 let result = ($($T::from_symbol(iter.next()?)?,)*);

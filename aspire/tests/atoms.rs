@@ -1,4 +1,9 @@
-use aspire::{Control, F0, Fun, Symbol, Symbolic};
+use aspire::{Control, Fun, Symbol, Symbolic};
+
+#[derive(Symbolic)]
+struct Node(i32);
+#[derive(Symbolic, PartialEq)]
+struct Edge(i32, i32);
 
 #[test]
 fn iterate_atoms_by_signature() {
@@ -11,12 +16,17 @@ fn iterate_atoms_by_signature() {
     .unwrap();
     ctl.ground_base().unwrap();
 
-    let edges = Vec::from_iter(ctl.atoms("edge").unwrap().into_iter().map(|(_, edge)| edge));
+    let edges = Vec::from_iter(
+        ctl.atoms::<Edge>()
+            .unwrap()
+            .into_iter()
+            .map(|(_, edge)| edge),
+    );
     assert_eq!(edges.len(), 2);
-    assert!(edges.contains(&(1, 2)));
-    assert!(edges.contains(&(2, 3)));
+    assert!(edges.contains(&Edge(1, 2)));
+    assert!(edges.contains(&Edge(2, 3)));
 
-    let nodes: Vec<(Symbol, i32)> = ctl.atoms("node").unwrap();
+    let nodes: Vec<(Symbol, Node)> = ctl.atoms().unwrap();
     assert_eq!(nodes.len(), 3);
 }
 
@@ -35,8 +45,8 @@ fn atoms_during_solve() {
 
     while handle.next_model().unwrap().is_some() {
         let model = handle.current_model().unwrap();
-        let edges: Vec<(Symbol, (i32, i32))> = handle.control().atoms("edge").unwrap();
-        for &(_, (a, b)) in &edges {
+        let edges: Vec<(Symbol, Edge)> = handle.control().atoms().unwrap();
+        for &(_, Edge(a, b)) in &edges {
             let sym = Fun("path", (a, b)).to_symbol();
             let _in_model = model.contains(sym).unwrap();
         }
@@ -50,7 +60,15 @@ fn atoms_with_symbol_args() {
     ctl.add("base", &[], "f(a,1). f(b,2). f(c,3).").unwrap();
     ctl.ground_base().unwrap();
 
-    let funs: Vec<(Symbol, (F0, i32))> = ctl.atoms("f").unwrap();
+    #[derive(Symbolic)]
+    enum Letter {
+        A,
+        B,
+        C,
+    }
+    #[derive(Symbolic)]
+    struct F(Letter, i32);
+    let funs: Vec<(Symbol, F)> = ctl.atoms().unwrap();
     assert_eq!(funs.len(), 3);
 }
 
@@ -60,7 +78,9 @@ fn atoms_no_matches() {
     ctl.add("base", &[], "a. b.").unwrap();
     ctl.ground_base().unwrap();
 
-    let result: Vec<(Symbol, i32)> = ctl.atoms("nonexistent").unwrap();
+    #[derive(Symbolic)]
+    struct Nonexistent;
+    let result: Vec<(Symbol, Nonexistent)> = ctl.atoms().unwrap();
     assert!(result.is_empty());
 }
 

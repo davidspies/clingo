@@ -39,7 +39,13 @@ pub fn derive_symbolic(input: TokenStream) -> TokenStream {
 fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream {
     let func_name = to_snake_case(&name.to_string());
 
-    match fields {
+    let field_count = match fields {
+        Fields::Unit => 0,
+        Fields::Unnamed(f) => f.unnamed.len(),
+        Fields::Named(f) => f.named.len(),
+    };
+
+    let symbolic_impl = match fields {
         Fields::Unit => {
             quote! {
                 impl Symbolic for #name {
@@ -58,9 +64,9 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
             }
         }
         Fields::Unnamed(fields) => {
-            let field_count = fields.unnamed.len();
-            let field_indices: Vec<syn::Index> = (0..field_count).map(syn::Index::from).collect();
-            let field_vars: Vec<syn::Ident> = (0..field_count)
+            let field_indices: Vec<syn::Index> =
+                (0..fields.unnamed.len()).map(syn::Index::from).collect();
+            let field_vars: Vec<syn::Ident> = (0..fields.unnamed.len())
                 .map(|i| syn::Ident::new(&format!("f{i}"), proc_macro2::Span::call_site()))
                 .collect();
 
@@ -86,13 +92,13 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
             }
         }
         Fields::Named(fields) => {
-            let field_count = fields.named.len();
             let field_names: Vec<&syn::Ident> = fields
                 .named
                 .iter()
                 .map(|f| f.ident.as_ref().unwrap())
                 .collect();
-            let field_indices: Vec<syn::Index> = (0..field_count).map(syn::Index::from).collect();
+            let field_indices: Vec<syn::Index> =
+                (0..fields.named.len()).map(syn::Index::from).collect();
 
             quote! {
                 impl Symbolic for #name {
@@ -112,6 +118,16 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
                         ], true).unwrap()
                     }
                 }
+            }
+        }
+    };
+
+    quote! {
+        #symbolic_impl
+
+        impl aspire::SymbolicFun for #name {
+            fn signature() -> (&'static str, usize) {
+                (#func_name, #field_count)
             }
         }
     }

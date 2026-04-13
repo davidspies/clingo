@@ -3,9 +3,9 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 
+use crate::SymbolicFun;
 use crate::config::Configuration;
 use crate::error::{ClingoError, Error, check};
-use crate::fun::{Fun, SymbolicArgs};
 use crate::observer::{GroundStatement, ObserverState, make_observer};
 use crate::solve::{SolveHandle, solve_yielding};
 use crate::symbol::Symbol;
@@ -327,9 +327,10 @@ impl Control {
     ///
     /// This uses the symbolic atoms table, so it works on `&self` and can
     /// be called through `SolveHandle::control()`.
-    pub fn atoms<Args: SymbolicArgs>(&self, name: &str) -> Result<Vec<(Symbol, Args)>, Error> {
+    pub fn atoms<F: SymbolicFun>(&self) -> Result<Vec<(Symbol, F)>, Error> {
+        let (name, arity) = F::signature();
         let c_name = CString::new(name)?;
-        let arity = Args::arity() as u32;
+        let arity = arity as u32;
 
         let mut signature: clingo_sys::clingo_signature_t = 0;
         check(unsafe {
@@ -370,14 +371,13 @@ impl Control {
             })?;
 
             let symbol = unsafe { Symbol::from_raw(sym) };
-            let Fun(n, fun) = symbol.as_fun::<Args>().ok_or_else(|| {
+            let f = F::from_symbol(symbol).ok_or_else(|| {
                 Error::TypeMismatch(format!(
                     "atom {} does not match expected argument types",
                     symbol.to_string_lossy().unwrap_or_else(|_| "?".into()),
                 ))
             })?;
-            assert_eq!(n, name);
-            results.push((symbol, fun));
+            results.push((symbol, f));
 
             check(unsafe { clingo_sys::clingo_symbolic_atoms_next(atoms_table, iter, &mut iter) })?;
         }
