@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 clingo-sys = { workspace = true }
-ringo-derive = { path = "../ringo-derive" }
+ringo-derive = { version = "0.1.0", path = "../ringo-derive" }
 
 [features]
 default = ["static-linking"]
