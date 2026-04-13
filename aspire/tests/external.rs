@@ -1,4 +1,4 @@
-use ringo::{Control, ShowType, Symbol, TruthValue};
+use aspire::{Control, ShowType, Symbol, TruthValue};
 
 #[test]
 fn assign_external_true() {

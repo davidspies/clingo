@@ -1,4 +1,4 @@
-use ringo::{Atom, Control, ExternalType, GroundStatement, Sign, Symbol};
+use aspire::{Atom, Control, ExternalType, GroundStatement, Sign, Symbol};
 
 #[test]
 fn observe_rules() {
@@ -103,5 +103,5 @@ fn assign_external_after_observe() {
     let _stmts = ctl.ground_base_observed().unwrap();
 
     let sym = Symbol::parse("state(a)").unwrap();
-    ctl.assign_external(sym, ringo::TruthValue::True).unwrap();
+    ctl.assign_external(sym, aspire::TruthValue::True).unwrap();
 }

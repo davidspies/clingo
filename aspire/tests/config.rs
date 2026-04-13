@@ -1,4 +1,4 @@
-use ringo::Control;
+use aspire::Control;
 
 #[test]
 fn read_config() {

@@ -1,0 +1,16 @@
+[package]
+name = "aspire-derive"
+version = "0.1.0"
+edition = "2024"
+description = "Derive macros for aspire"
+license = "MIT"
+repository = "https://github.com/davidspies/clingo"
+documentation = "https://docs.rs/aspire-derive"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"

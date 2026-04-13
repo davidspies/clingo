@@ -1,0 +1,16 @@
+[package]
+name = "aspire"
+version = "0.1.0"
+edition = "2024"
+description = "Rust bindings for Clingo"
+license = "MIT"
+repository = "https://github.com/davidspies/clingo"
+documentation = "https://docs.rs/aspire"
+
+[dependencies]
+clingo-sys = { workspace = true }
+aspire-derive = { version = "0.1.0", path = "../aspire-derive" }
+
+[features]
+default = ["static-linking"]
+static-linking = ["clingo-sys/static-linking"]

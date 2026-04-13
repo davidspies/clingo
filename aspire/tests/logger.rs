@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use ringo::{Control, Warning};
+use aspire::{Control, Warning};
 
 #[test]
 fn custom_logger() {

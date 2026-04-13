@@ -1,4 +1,4 @@
-use ringo::{Control, Symbol};
+use aspire::{Control, Symbol};
 
 #[test]
 fn create_and_drop() {

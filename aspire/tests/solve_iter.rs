@@ -1,4 +1,4 @@
-use ringo::{Control, ShowType, Symbol};
+use aspire::{Control, ShowType, Symbol};
 
 #[test]
 fn iterate_models() {

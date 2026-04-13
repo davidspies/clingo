@@ -1,4 +1,4 @@
-use ringo::{Symbol, Symbolic};
+use aspire::{Symbol, Symbolic};
 
 #[derive(Debug, PartialEq, Symbolic)]
 struct MyPred(i32, i32);

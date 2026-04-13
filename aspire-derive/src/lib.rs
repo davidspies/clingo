@@ -43,16 +43,16 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
         Fields::Unit => {
             quote! {
                 impl Symbolic for #name {
-                    fn from_symbol(sym: ringo::Symbol) -> Option<Self> {
-                        if sym.symbol_type() != ringo::SymbolType::Function { return None; }
+                    fn from_symbol(sym: aspire::Symbol) -> Option<Self> {
+                        if sym.symbol_type() != aspire::SymbolType::Function { return None; }
                         if sym.is_positive() != Some(true) { return None; }
                         if sym.name()? != #func_name { return None; }
                         let args = sym.arguments()?;
                         if !args.is_empty() { return None; }
                         Some(#name)
                     }
-                    fn to_symbol(&self) -> ringo::Symbol {
-                        ringo::Symbol::id(#func_name, true).unwrap()
+                    fn to_symbol(&self) -> aspire::Symbol {
+                        aspire::Symbol::id(#func_name, true).unwrap()
                     }
                 }
             }
@@ -66,8 +66,8 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
 
             quote! {
                 impl Symbolic for #name {
-                    fn from_symbol(sym: ringo::Symbol) -> Option<Self> {
-                        if sym.symbol_type() != ringo::SymbolType::Function { return None; }
+                    fn from_symbol(sym: aspire::Symbol) -> Option<Self> {
+                        if sym.symbol_type() != aspire::SymbolType::Function { return None; }
                         if sym.is_positive() != Some(true) { return None; }
                         if sym.name()? != #func_name { return None; }
                         let args = sym.arguments()?;
@@ -76,9 +76,9 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
                             #(Symbolic::from_symbol(args[#field_indices])?,)*
                         ))
                     }
-                    fn to_symbol(&self) -> ringo::Symbol {
+                    fn to_symbol(&self) -> aspire::Symbol {
                         let #name(#(#field_vars),*) = self;
-                        ringo::Symbol::function(#func_name, &[
+                        aspire::Symbol::function(#func_name, &[
                             #(#field_vars.to_symbol(),)*
                         ], true).unwrap()
                     }
@@ -96,8 +96,8 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
 
             quote! {
                 impl Symbolic for #name {
-                    fn from_symbol(sym: ringo::Symbol) -> Option<Self> {
-                        if sym.symbol_type() != ringo::SymbolType::Function { return None; }
+                    fn from_symbol(sym: aspire::Symbol) -> Option<Self> {
+                        if sym.symbol_type() != aspire::SymbolType::Function { return None; }
                         if sym.is_positive() != Some(true) { return None; }
                         if sym.name()? != #func_name { return None; }
                         let args = sym.arguments()?;
@@ -106,8 +106,8 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
                             #(#field_names: Symbolic::from_symbol(args[#field_indices])?,)*
                         })
                     }
-                    fn to_symbol(&self) -> ringo::Symbol {
-                        ringo::Symbol::function(#func_name, &[
+                    fn to_symbol(&self) -> aspire::Symbol {
+                        aspire::Symbol::function(#func_name, &[
                             #(self.#field_names.to_symbol(),)*
                         ], true).unwrap()
                     }
@@ -131,7 +131,7 @@ fn derive_enum(name: &syn::Ident, data: &syn::DataEnum) -> proc_macro2::TokenStr
                     (#func_name, 0) => Some(#name::#variant_name),
                 });
                 to_arms.push(quote! {
-                    #name::#variant_name => ringo::Symbol::id(#func_name, true).unwrap(),
+                    #name::#variant_name => aspire::Symbol::id(#func_name, true).unwrap(),
                 });
             }
             Fields::Unnamed(fields) => {
@@ -149,7 +149,7 @@ fn derive_enum(name: &syn::Ident, data: &syn::DataEnum) -> proc_macro2::TokenStr
                 });
                 to_arms.push(quote! {
                     #name::#variant_name(#(#field_vars),*) => {
-                        ringo::Symbol::function(#func_name, &[
+                        aspire::Symbol::function(#func_name, &[
                             #(#field_vars.to_symbol(),)*
                         ], true).unwrap()
                     }
@@ -172,7 +172,7 @@ fn derive_enum(name: &syn::Ident, data: &syn::DataEnum) -> proc_macro2::TokenStr
                 });
                 to_arms.push(quote! {
                     #name::#variant_name { #(#field_names),* } => {
-                        ringo::Symbol::function(#func_name, &[
+                        aspire::Symbol::function(#func_name, &[
                             #(#field_names.to_symbol(),)*
                         ], true).unwrap()
                     }
@@ -183,8 +183,8 @@ fn derive_enum(name: &syn::Ident, data: &syn::DataEnum) -> proc_macro2::TokenStr
 
     quote! {
         impl Symbolic for #name {
-            fn from_symbol(sym: ringo::Symbol) -> Option<Self> {
-                if sym.symbol_type() != ringo::SymbolType::Function { return None; }
+            fn from_symbol(sym: aspire::Symbol) -> Option<Self> {
+                if sym.symbol_type() != aspire::SymbolType::Function { return None; }
                 if sym.is_positive() != Some(true) { return None; }
                 let name = sym.name()?;
                 let args = sym.arguments()?;
@@ -193,7 +193,7 @@ fn derive_enum(name: &syn::Ident, data: &syn::DataEnum) -> proc_macro2::TokenStr
                     _ => None,
                 }
             }
-            fn to_symbol(&self) -> ringo::Symbol {
+            fn to_symbol(&self) -> aspire::Symbol {
                 match self {
                     #(#to_arms)*
                 }

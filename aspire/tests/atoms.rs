@@ -1,4 +1,4 @@
-use ringo::{Control, F0, Fun, Symbol, Symbolic};
+use aspire::{Control, F0, Fun, Symbol, Symbolic};
 
 #[test]
 fn iterate_atoms_by_signature() {

@@ -1,5 +1,5 @@
 [workspace]
-members = ["ringo", "ringo-derive"]
+members = ["aspire", "aspire-derive"]
 resolver = "3"
 
 [workspace.dependencies]
