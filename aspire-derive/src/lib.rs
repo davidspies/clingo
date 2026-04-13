@@ -130,6 +130,12 @@ fn derive_struct(name: &syn::Ident, fields: &Fields) -> proc_macro2::TokenStream
                 (#func_name, #field_count)
             }
         }
+
+        impl std::fmt::Display for #name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Display::fmt(&self.to_symbol(), f)
+            }
+        }
     }
 }
 
@@ -213,6 +219,12 @@ fn derive_enum(name: &syn::Ident, data: &syn::DataEnum) -> proc_macro2::TokenStr
                 match self {
                     #(#to_arms)*
                 }
+            }
+        }
+
+        impl std::fmt::Display for #name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                std::fmt::Display::fmt(&self.to_symbol(), f)
             }
         }
     }
