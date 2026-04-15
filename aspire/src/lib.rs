@@ -8,7 +8,7 @@ mod symbol;
 
 pub use aspire_derive::Symbolic;
 pub use config::Configuration;
-pub use control::{Control, TruthValue, Warning};
+pub use control::{Control, InterruptHandle, TruthValue, Warning};
 pub use error::{ClingoError, ClingoErrorCode, Error};
 pub use fun::{F0, Fun, Symbolic, SymbolicArgs, SymbolicFun, f0};
 pub use observer::{Atom, ExternalType, GroundStatement, Literal, Sign};

@@ -65,10 +65,7 @@ mod tests {
     const _: fn() = _assert_bounds::<ModelCache>;
 
     fn make_cache(syms: &[&str]) -> ModelCache {
-        let symbols: Vec<Symbol> = syms
-            .iter()
-            .map(|s| Symbol::parse(s).unwrap())
-            .collect();
+        let symbols: Vec<Symbol> = syms.iter().map(|s| Symbol::parse(s).unwrap()).collect();
         ModelCache::from_symbols(symbols)
     }
 

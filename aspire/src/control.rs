@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 use std::ptr;
+use std::sync::{Arc, RwLock};
 
 use crate::SymbolicFun;
 use crate::config::Configuration;
@@ -59,6 +60,8 @@ unsafe extern "C" fn logger_trampoline(
 /// This is the main entry point for grounding and solving logic programs.
 pub struct Control {
     pub(crate) ptr: ptr::NonNull<clingo_sys::clingo_control_t>,
+    // Shared with InterruptHandle; nulled on drop so late interrupts are no-ops.
+    interrupt_ptr: Arc<RwLock<RawControlPtr>>,
     // Boxed logger closure, kept alive for the lifetime of the Control.
     // Must be dropped *after* ptr since clingo may call the logger during cleanup.
     #[expect(clippy::type_complexity)]
@@ -71,8 +74,45 @@ pub struct Control {
 
 // clingo_control_t is single-threaded; do not send across threads.
 
+/// Wrapper around a raw pointer that opts into `Send + Sync`.
+///
+/// Safety: the pointee (`clingo_control_t`) supports `clingo_control_interrupt`
+/// from any thread, and we guard access with an `RwLock` to prevent use-after-free.
+struct RawControlPtr(*mut clingo_sys::clingo_control_t);
+unsafe impl Send for RawControlPtr {}
+unsafe impl Sync for RawControlPtr {}
+
+/// A thread-safe handle that can interrupt a running solve.
+///
+/// Obtained via [`Control::interrupt_handle`]. The handle is `Send + Sync`
+/// and can be cloned, so it can be shared across threads.
+///
+/// If the `Control` has been dropped, `interrupt()` is a safe no-op.
+#[derive(Clone)]
+pub struct InterruptHandle {
+    ptr: Arc<RwLock<RawControlPtr>>,
+}
+
+impl InterruptHandle {
+    /// Interrupt the running solve operation.
+    ///
+    /// This is safe to call from any thread. If the `Control` has already
+    /// been dropped, this is a no-op.
+    pub fn interrupt(&self) {
+        let guard = self.ptr.read().unwrap();
+        if !guard.0.is_null() {
+            unsafe {
+                clingo_sys::clingo_control_interrupt(guard.0);
+            }
+        }
+    }
+}
+
 impl Drop for Control {
     fn drop(&mut self) {
+        // Null out the shared pointer so any outstanding InterruptHandles become no-ops.
+        // The write lock ensures no interrupt call is in flight during free.
+        self.interrupt_ptr.write().unwrap().0 = ptr::null_mut();
         unsafe {
             clingo_sys::clingo_control_free(self.ptr.as_ptr());
         }
@@ -143,9 +183,20 @@ impl Control {
 
         Ok(Control {
             ptr: ctl_ptr,
+            interrupt_ptr: Arc::new(RwLock::new(RawControlPtr(ctl_ptr.as_ptr()))),
             _logger: boxed_logger,
             observer_state,
         })
+    }
+
+    /// Get a handle that can be used to interrupt a running solve from another thread.
+    ///
+    /// The returned handle is `Send + Sync + Clone`. If the `Control` is dropped
+    /// before the handle is used, `interrupt()` becomes a no-op.
+    pub fn interrupt_handle(&self) -> InterruptHandle {
+        InterruptHandle {
+            ptr: Arc::clone(&self.interrupt_ptr),
+        }
     }
 
     /// Add a logic program block.
