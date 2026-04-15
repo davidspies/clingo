@@ -1,5 +1,9 @@
+mod interrupt;
+mod truth_value;
+mod warning;
+
 use std::cell::RefCell;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 use std::sync::{Arc, RwLock};
@@ -11,49 +15,12 @@ use crate::observer::{GroundStatement, ObserverState, make_observer};
 use crate::solve::{SolveHandle, solve_yielding};
 use crate::symbol::Symbol;
 
-/// Warning codes from the clingo logger.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Warning {
-    OperationUndefined,
-    RuntimeError,
-    AtomUndefined,
-    FileIncluded,
-    VariableUnbounded,
-    GlobalVariable,
-    Other,
-}
+use self::interrupt::RawControlPtr;
+use self::warning::logger_trampoline;
 
-impl Warning {
-    fn from_raw(code: clingo_sys::clingo_warning_t) -> Self {
-        match code as u32 {
-            clingo_sys::clingo_warning_e_clingo_warning_operation_undefined => {
-                Warning::OperationUndefined
-            }
-            clingo_sys::clingo_warning_e_clingo_warning_runtime_error => Warning::RuntimeError,
-            clingo_sys::clingo_warning_e_clingo_warning_atom_undefined => Warning::AtomUndefined,
-            clingo_sys::clingo_warning_e_clingo_warning_file_included => Warning::FileIncluded,
-            clingo_sys::clingo_warning_e_clingo_warning_variable_unbounded => {
-                Warning::VariableUnbounded
-            }
-            clingo_sys::clingo_warning_e_clingo_warning_global_variable => Warning::GlobalVariable,
-            _ => Warning::Other,
-        }
-    }
-}
-
-/// C-compatible trampoline for the logger callback.
-unsafe extern "C" fn logger_trampoline(
-    code: clingo_sys::clingo_warning_t,
-    message: *const c_char,
-    data: *mut c_void,
-) {
-    let closure = unsafe { &mut *(data as *mut Box<dyn FnMut(Warning, &str)>) };
-    let warning = Warning::from_raw(code);
-    let msg = unsafe { CStr::from_ptr(message) }
-        .to_str()
-        .unwrap_or("<invalid UTF-8>");
-    closure(warning, msg);
-}
+pub use self::interrupt::InterruptHandle;
+pub use self::truth_value::TruthValue;
+pub use self::warning::Warning;
 
 /// Owns a `clingo_control_t` and frees it on drop.
 ///
@@ -73,40 +40,6 @@ pub struct Control {
 }
 
 // clingo_control_t is single-threaded; do not send across threads.
-
-/// Wrapper around a raw pointer that opts into `Send + Sync`.
-///
-/// Safety: the pointee (`clingo_control_t`) supports `clingo_control_interrupt`
-/// from any thread, and we guard access with an `RwLock` to prevent use-after-free.
-struct RawControlPtr(*mut clingo_sys::clingo_control_t);
-unsafe impl Send for RawControlPtr {}
-unsafe impl Sync for RawControlPtr {}
-
-/// A thread-safe handle that can interrupt a running solve.
-///
-/// Obtained via [`Control::interrupt_handle`]. The handle is `Send + Sync`
-/// and can be cloned, so it can be shared across threads.
-///
-/// If the `Control` has been dropped, `interrupt()` is a safe no-op.
-#[derive(Clone)]
-pub struct InterruptHandle {
-    ptr: Arc<RwLock<RawControlPtr>>,
-}
-
-impl InterruptHandle {
-    /// Interrupt the running solve operation.
-    ///
-    /// This is safe to call from any thread. If the `Control` has already
-    /// been dropped, this is a no-op.
-    pub fn interrupt(&self) {
-        let guard = self.ptr.read().unwrap();
-        if !guard.0.is_null() {
-            unsafe {
-                clingo_sys::clingo_control_interrupt(guard.0);
-            }
-        }
-    }
-}
 
 impl Drop for Control {
     fn drop(&mut self) {
@@ -455,26 +388,5 @@ impl Control {
         };
         check(unsafe { clingo_sys::clingo_control_release_external(self.ptr.as_ptr(), literal) })?;
         Ok(true)
-    }
-}
-
-/// Truth value for external atoms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TruthValue {
-    /// Let the solver decide.
-    Free,
-    /// Assign true.
-    True,
-    /// Assign false.
-    False,
-}
-
-impl TruthValue {
-    fn to_raw(self) -> clingo_sys::clingo_truth_value_t {
-        match self {
-            TruthValue::Free => clingo_sys::clingo_truth_value_e_clingo_truth_value_free as i32,
-            TruthValue::True => clingo_sys::clingo_truth_value_e_clingo_truth_value_true as i32,
-            TruthValue::False => clingo_sys::clingo_truth_value_e_clingo_truth_value_false as i32,
-        }
     }
 }
