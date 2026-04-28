@@ -21,7 +21,7 @@ pub struct ModelCache(HashMap<(&'static str, usize), HashSet<Symbol>>);
 
 impl ModelCache {
     #[track_caller]
-    pub(super) fn from_symbols(symbols: Vec<Symbol>) -> Self {
+    pub fn from_symbols(symbols: impl IntoIterator<Item = Symbol>) -> Self {
         let mut by_signature: HashMap<(&'static str, usize), HashSet<Symbol>> = HashMap::new();
         for sym in symbols {
             let key = sym.signature().unwrap();
