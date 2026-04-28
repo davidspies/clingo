@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use crate::ShowType;
 use crate::error::{ClingoError, check};
 use crate::symbol::Symbol;
@@ -15,7 +13,7 @@ impl RawModel {
     }
 
     /// Get the symbols in this model matching the given show type.
-    pub(super) fn symbols(&self, show: ShowType) -> Result<HashSet<Symbol>, ClingoError> {
+    pub(super) fn symbols(&self, show: ShowType) -> Result<Vec<Symbol>, ClingoError> {
         let bits = show.to_bitset();
         let mut size: usize = 0;
         check(unsafe { clingo_sys::clingo_model_symbols_size(self.ptr, bits, &mut size) })?;

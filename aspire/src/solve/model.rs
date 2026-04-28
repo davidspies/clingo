@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, collections::HashSet};
+use std::cell::OnceCell;
 
 use crate::{ClingoError, Error, SymbolicFun, solve::ModelCache, symbol::Symbol};
 
@@ -20,7 +20,7 @@ impl Model {
         self.raw.contains(sym)
     }
 
-    pub fn symbols(&self, shown: ShowType) -> Result<HashSet<Symbol>, ClingoError> {
+    pub fn symbols(&self, shown: ShowType) -> Result<Vec<Symbol>, ClingoError> {
         self.raw.symbols(shown)
     }
 

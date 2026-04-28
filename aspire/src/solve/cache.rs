@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
 use crate::{Symbol, SymbolicFun};
 
@@ -14,26 +17,18 @@ use crate::{Symbol, SymbolicFun};
 /// [`SolveHandle::take_model_cache`](super::SolveHandle::take_model_cache)
 /// (owned).
 #[derive(Clone, Debug)]
-pub struct ModelCache {
-    by_signature: HashMap<(&'static str, usize), Vec<Symbol>>,
-    symbols: HashSet<Symbol>,
-}
+pub struct ModelCache(HashMap<(&'static str, usize), HashSet<Symbol>>);
 
 impl ModelCache {
     #[track_caller]
-    pub(super) fn from_symbols(symbol_set: HashSet<Symbol>) -> Self {
-        let mut by_signature: HashMap<(&'static str, usize), Vec<Symbol>> = HashMap::new();
-        for &sym in &symbol_set {
+    pub(super) fn from_symbols(symbols: Vec<Symbol>) -> Self {
+        let mut by_signature: HashMap<(&'static str, usize), HashSet<Symbol>> = HashMap::new();
+        for sym in symbols {
             let key = (sym.name().unwrap(), sym.arity().unwrap());
-            by_signature.entry(key).or_default().push(sym)
+            let inserted = by_signature.entry(key).or_default().insert(sym);
+            assert!(inserted)
         }
-        for v in by_signature.values_mut() {
-            v.sort()
-        }
-        Self {
-            by_signature,
-            symbols: symbol_set,
-        }
+        Self(by_signature)
     }
 
     /// Decode all cached atoms whose predicate signature matches `T`.
@@ -41,7 +36,7 @@ impl ModelCache {
     /// Returns an empty `Vec` if no atoms with that signature are present.
     pub fn atoms<T: SymbolicFun>(&self) -> Result<Vec<T>, crate::Error> {
         let signature = T::signature();
-        let Some(atoms) = self.by_signature.get(&signature) else {
+        let Some(atoms) = self.0.get(&signature) else {
             return Ok(vec![]);
         };
         atoms
@@ -50,18 +45,34 @@ impl ModelCache {
             .collect()
     }
 
+    pub fn take_atoms<T: SymbolicFun>(&mut self) -> Result<Vec<T>, crate::Error> {
+        let signature = T::signature();
+        let Some(atoms) = self.0.remove(&signature) else {
+            return Ok(vec![]);
+        };
+        atoms
+            .into_iter()
+            .map(|sym| T::from_symbol_result(sym))
+            .collect()
+    }
+
     /// Look up cached atoms by predicate name and arity, returning a slice of
     /// raw [`Symbol`] values.
-    pub fn get_pred<'a, 'b: 'a>(&'a self, name: &'b str, arity: usize) -> &'a [Symbol] {
-        match self.by_signature.get(&(name, arity)) {
-            None => &[],
-            Some(atoms) => atoms.as_slice(),
+    pub fn get_pred<'a, 'b: 'a>(&'a self, name: &'b str, arity: usize) -> Cow<'a, HashSet<Symbol>> {
+        match self.0.get(&(name, arity)) {
+            None => Cow::Owned(HashSet::new()),
+            Some(atoms) => Cow::Borrowed(atoms),
         }
     }
 
-    /// HashSet with all cached symbols, across all predicates.
-    pub fn symbols(&self) -> &HashSet<Symbol> {
-        &self.symbols
+    pub fn symbols(&self) -> impl Iterator<Item = Symbol> {
+        self.0.values().flat_map(|v| v.iter().copied())
+    }
+
+    pub fn contains<S: SymbolicFun>(&self, value: S) -> bool {
+        self.0
+            .get(&S::signature())
+            .is_some_and(|v| v.contains(&value.to_symbol()))
     }
 }
 
@@ -74,14 +85,14 @@ mod tests {
     const _: fn() = _assert_bounds::<ModelCache>;
 
     fn make_cache(syms: &[&str]) -> ModelCache {
-        let symbols: HashSet<Symbol> = syms.iter().map(|s| Symbol::parse(s).unwrap()).collect();
+        let symbols: Vec<Symbol> = syms.iter().map(|s| Symbol::parse(s).unwrap()).collect();
         ModelCache::from_symbols(symbols)
     }
 
     #[test]
     fn empty_cache() {
-        let cache = ModelCache::from_symbols(HashSet::new());
-        assert_eq!(cache.symbols().len(), 0);
+        let cache = ModelCache::from_symbols(Vec::new());
+        assert_eq!(cache.symbols().count(), 0);
         assert!(cache.get_pred("anything", 0).is_empty());
     }
 
@@ -98,7 +109,7 @@ mod tests {
     #[test]
     fn symbols_returns_all() {
         let cache = make_cache(&["a(1)", "b(2)", "a(3)"]);
-        assert_eq!(cache.symbols().len(), 3);
+        assert_eq!(cache.symbols().count(), 3);
     }
 
     #[test]
@@ -116,7 +127,7 @@ mod tests {
         let handle = std::thread::spawn(move || {
             assert_eq!(cache.get_pred("x", 1).len(), 1);
             assert_eq!(cache.get_pred("y", 2).len(), 1);
-            cache.symbols().len()
+            cache.symbols().count()
         });
         assert_eq!(handle.join().unwrap(), 2);
     }
