@@ -195,6 +195,10 @@ impl Symbol {
         unsafe { self.gen_args(|raw| raw.len()) }
     }
 
+    pub fn signature(self) -> Option<(&'static str, usize)> {
+        Some((self.name()?, self.arity().unwrap()))
+    }
+
     unsafe fn gen_args<T>(self, f: impl Fn(&[u64]) -> T) -> Option<T> {
         let mut ptr: *const clingo_sys::clingo_symbol_t = ptr::null();
         let mut len: usize = 0;

@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use crate::{Symbol, SymbolicFun};
+use crate::{Symbol, Symbolic, SymbolicFun};
 
 /// An owned, thread-safe snapshot of the atoms in a model.
 ///
@@ -24,7 +24,7 @@ impl ModelCache {
     pub(super) fn from_symbols(symbols: Vec<Symbol>) -> Self {
         let mut by_signature: HashMap<(&'static str, usize), HashSet<Symbol>> = HashMap::new();
         for sym in symbols {
-            let key = (sym.name().unwrap(), sym.arity().unwrap());
+            let key = sym.signature().unwrap();
             let inserted = by_signature.entry(key).or_default().insert(sym);
             assert!(inserted)
         }
@@ -69,10 +69,11 @@ impl ModelCache {
         self.0.values().flat_map(|v| v.iter().copied())
     }
 
-    pub fn contains<S: SymbolicFun>(&self, value: S) -> bool {
+    pub fn contains<S: Symbolic>(&self, value: S) -> bool {
+        let symbol = value.to_symbol();
         self.0
-            .get(&S::signature())
-            .is_some_and(|v| v.contains(&value.to_symbol()))
+            .get(&symbol.signature().unwrap())
+            .is_some_and(|v| v.contains(&symbol))
     }
 }
 
