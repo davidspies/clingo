@@ -159,6 +159,17 @@ impl Control {
         Ok(())
     }
 
+    /// Load a logic program from a file.
+    ///
+    /// This extends the logic program with the contents of `path`. After
+    /// loading, ground the desired program parts with [`ground`](Self::ground)
+    /// or [`ground_base`](Self::ground_base).
+    pub fn load(&mut self, path: &str) -> Result<(), Error> {
+        let c_path = CString::new(path)?;
+        check(unsafe { clingo_sys::clingo_control_load(self.ptr.as_ptr(), c_path.as_ptr()) })?;
+        Ok(())
+    }
+
     /// Ground the given program parts.
     ///
     /// Each element is `(name, &[symbol_values])`. For the common case of
